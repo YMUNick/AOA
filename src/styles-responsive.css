@@ -1,0 +1,219 @@
+/* Final responsive overrides: keep these after the shared/workspace styles. */
+.prior-question { min-width: 0; overflow-wrap: anywhere; }
+.mobile-usage-details { display: none; }
+
+@media (max-width: 950px), (pointer: coarse) {
+  .app-shell button.button,
+  .app-shell button.text-button,
+  .app-shell button.icon-button,
+  .app-shell .local-preparation button,
+  .app-shell .mobile-tabs > button,
+  .app-shell .profile-details summary,
+  .app-shell .field input,
+  .app-shell .field select,
+  .app-shell .field textarea,
+  .app-shell .translation-control select,
+  .app-shell .help-links a,
+  .app-shell .source-link,
+  .app-shell .brand {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .app-shell button.icon-button { width: 44px; height: 44px; }
+  .app-shell .chinese { font-size: 16px; }
+  .app-shell .panel-heading p,
+  .app-shell .panel-heading > .compact,
+  .app-shell .transcript-time,
+  .app-shell .transcript-footer,
+  .app-shell .answer-footer,
+  .app-shell .label-row,
+  .app-shell .label-row > span:last-child,
+  .app-shell .answer-result-heading > span:last-child,
+  .app-shell .session-meta,
+  .app-shell .status-badge,
+  .app-shell .session-usage > span,
+  .app-shell .token-details,
+  .app-shell .manual-input small,
+  .app-shell .budget-settings .field-hint,
+  .app-shell .profile-details small,
+  .app-shell .start-note { font-size: 12px; }
+  .app-shell .field input,
+  .app-shell .field select,
+  .app-shell .field textarea,
+  .app-shell .translation-control select { font-size: 16px; }
+}
+
+@media (max-width: 760px), (max-width: 950px) and (max-height: 500px) {
+  .workspace-grid { display: block; height: auto; max-height: none; }
+  .workspace-grid > .mobile-hidden { display: none; }
+  .transcript-panel,
+  .answer-panel { height: clamp(320px, 62dvh, 640px); min-height: 0; max-height: none; }
+  .transcript-panel:has(.manual-input) { height: max(440px, 62dvh); }
+  .mobile-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 5px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    margin-bottom: 16px;
+  }
+  .mobile-tabs > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 8px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .mobile-tabs > button.active { background: #1b2a40; color: var(--text); }
+  .tab-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--violet); }
+  .workspace-heading { flex-wrap: wrap; gap: 14px; }
+  .panel-heading { flex-direction: row; align-items: center; }
+  .answer-panel .panel-heading .label-pill { display: none; }
+  .transcript-footer > span { display: flex; }
+  .transcript-footer { justify-content: space-between; }
+  .mobile-answer-cta { display: flex; width: 100%; margin-top: 12px; justify-content: space-between; }
+  .workspace-page .manual-input textarea { font-size: 16px; }
+
+  .session-controls {
+    position: sticky;
+    bottom: 0;
+    z-index: 25;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    margin-top: 12px;
+    overflow: visible;
+    background: var(--panel);
+  }
+  .session-clock { min-width: 0; gap: 7px; }
+  .session-clock > strong { font-size: 15px; letter-spacing: 0; }
+  .session-clock > span:last-child { display: none; }
+  .session-usage { min-width: 0; padding-left: 10px; }
+  .session-usage > strong { font-size: 15px; white-space: nowrap; }
+  .session-usage .budget-track { width: 100%; max-width: 90px; }
+  .session-controls .token-details { display: none; }
+  .session-controls .session-buttons {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .session-buttons .button { min-width: 0; padding: 9px 5px; gap: 5px; }
+  .session-buttons .export-button { margin-right: 0; }
+  .mobile-usage-details { display: block; position: relative; }
+  .mobile-usage-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--inset);
+    font-size: 12px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .mobile-usage-details > summary::-webkit-details-marker { display: none; }
+  .usage-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: min(340px, calc(100vw - 56px));
+    max-width: calc(100vw - 32px);
+    max-height: 45dvh;
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid var(--input-border);
+    border-radius: 10px;
+    background: var(--inset);
+    box-shadow: 0 8px 24px #02060f80;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    z-index: 1;
+  }
+  .usage-popover p + p { margin-top: 8px; }
+  .empty-transcript, .empty-answer { min-height: 250px; }
+}
+
+@media (max-width: 560px) {
+  .app-shell .eyebrow, .wordmark > span { display: none; }
+  .main-content:has(.workspace-page) { padding-top: 12px; }
+  .main-content:has(.workspace-page) > .topbar { display: none; }
+  .sidebar { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); gap: 12px; }
+  .topbar { margin-bottom: 20px; }
+  .page-heading { margin-bottom: 22px; }
+  .workspace-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .workspace-heading > div { display: contents; }
+  .workspace-heading h1 { grid-column: 1; grid-row: 1; font-size: 19px; line-height: 1.35; }
+  .workspace-heading .session-meta { grid-column: 1 / -1; grid-row: 2; margin-top: 0; gap: 8px; }
+  .workspace-heading .settings-button {
+    grid-column: 2;
+    grid-row: 1;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+  }
+  .workspace-page .demo-notice { flex-wrap: nowrap; align-items: flex-start; gap: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .workspace-page .demo-notice > svg { margin-top: 2px; }
+  .workspace-page .demo-notice > span { min-width: 0; flex: 1; }
+  .workspace-page .mobile-tabs { margin-bottom: 12px; }
+  .transcript-footer { padding: 8px 12px; gap: 6px; }
+  .transcript-footer > span { gap: 5px; }
+  .transcript-footer .text-button { font-size: 12px; white-space: nowrap; }
+  .panel-heading { gap: 10px; padding: 16px 14px; }
+  .panel-heading > div { min-width: 0; }
+  .panel-heading > .compact { flex-shrink: 0; }
+  .answer-result-heading { flex-wrap: wrap; gap: 6px; }
+  .label-row { flex-wrap: wrap; gap: 6px; }
+}
+
+@media (max-width: 360px) {
+  .workspace-page .panel-heading { padding: 8px 12px; }
+  .workspace-page .panel-heading p { display: none; }
+  .workspace-page .transcript-row { padding-top: 16px; }
+  .workspace-page .transcript-time { margin-bottom: 8px; }
+}
+
+@media (max-width: 950px) and (max-height: 500px) {
+  .main-content:has(.workspace-page) { padding-top: 12px; }
+  .main-content:has(.workspace-page) > .topbar { display: none; }
+  .workspace-heading .eyebrow { display: none; }
+  .workspace-heading { margin-bottom: 8px; align-items: center; }
+  .workspace-heading h1 { display: none; }
+  .workspace-heading .session-meta { margin-top: 0; }
+  .transcript-panel, .answer-panel { height: max(280px, calc(100dvh - 140px)); }
+  .transcript-panel:has(.manual-input) { height: 420px; }
+  .panel-heading { padding: 12px 16px; }
+  .session-controls { gap: 6px; padding-top: 6px; }
+  .session-controls .session-buttons { padding-top: 6px; }
+}
+
+@media (min-width: 700px) and (max-width: 950px) and (max-height: 500px) {
+  .session-controls { grid-template-columns: 90px 110px 44px minmax(0, 1fr); gap: 12px; }
+  .session-controls .session-buttons { grid-column: 4; border-top: 0; padding-top: 0; }
+}
