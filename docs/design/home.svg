@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" role="img" aria-labelledby="title desc">
+  <title id="title">AOA 首頁設定介面設計預覽</title>
+  <desc id="desc">靜態設計稿。深藍黑底色、青藍與電光紫點綴，左側導覽，中間設定麥克風、語言、本機翻譯、安全代理服務位址與存取碼，預設 OpenAI 省費模式。右側顯示訪談流程、一小時預算與開始按鈕。所有內容均為範例。</desc>
+  <defs>
+    <style>
+      text{font-family:system-ui,'Microsoft JhengHei','Noto Sans TC',sans-serif;fill:#ECF3FF}
+      .muted{fill:#A2B1C8}.accent{fill:#54DAFF}.on-accent{fill:#071420}.ai{fill:#B9A1FF}.light{fill:#ECF3FF}.label{font-size:14px;font-weight:600}.body{font-size:16px}.small{font-size:13px}.eyebrow{font-size:11px;font-weight:700;letter-spacing:2px}
+      .icon{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <symbol id="chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5" class="icon"/></symbol>
+    <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3" class="icon"/><path d="M5.5 11v1a6.5 6.5 0 0 0 13 0v-1M12 18.5V22m-4 0h8" class="icon"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" class="icon"/></symbol>
+    <symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3Zm6 10v-7h6v7" class="icon"/></symbol>
+    <symbol id="lines" viewBox="0 0 24 24"><path d="M5 5h14M5 12h14M5 19h9" class="icon"/></symbol>
+    <symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="icon"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2.5M12 17h.01" class="icon"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z" class="icon"/><path d="m8.5 12 2.5 2.5 4.5-5" class="icon"/></symbol>
+    <symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" class="icon"/><circle cx="12" cy="12" r="2.5" class="icon"/></symbol>
+  </defs>
+  <rect width="1440" height="1000" fill="#070D18"/>
+  <rect width="96" height="1000" fill="#0B1423"/>
+  <path d="M96 0v1000" stroke="#2C3F59"/>
+  <rect x="25" y="28" width="46" height="46" rx="14" fill="#54DAFF"/>
+  <path d="m35 58 7-17 7 17m-12-5h10m4 5 7-17 7 17m-12-5h10" stroke="#071420" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="16" y="124" width="64" height="72" rx="14" fill="#142D41"/>
+  <use href="#home" x="36" y="136" width="24" height="24" color="#54DAFF"/>
+  <text x="48" y="181" text-anchor="middle" font-size="12" font-weight="600" class="accent">開始</text>
+  <use href="#lines" x="36" y="223" width="24" height="24" color="#A2B1C8"/>
+  <text x="48" y="268" text-anchor="middle" font-size="12" class="muted">訪談</text>
+  <use href="#help" x="36" y="906" width="24" height="24" color="#A2B1C8"/>
+  <text x="48" y="951" text-anchor="middle" font-size="12" class="muted">使用說明</text>
+
+  <text x="144" y="53" class="eyebrow muted">AOA / INTERVIEW WORKSPACE</text>
+  <rect x="1168" y="29" width="224" height="32" rx="16" fill="#1A2539"/>
+  <circle cx="1186" cy="45" r="3" fill="#A2B1C8"/>
+  <text x="1198" y="50" class="small muted">設計預覽 · 範例內容</text>
+  <text x="144" y="126" font-size="36" font-weight="650" letter-spacing="-.8">把注意力留給對話。</text>
+  <text x="144" y="164" font-size="17" class="muted">即時理解英文問題，再用你的經驗回答。</text>
+
+  <rect x="144" y="208" width="800" height="736" rx="20" fill="#101A2B" stroke="#2C3F59"/>
+  <text x="176" y="254" font-size="21" font-weight="650">開始前，先設定好</text>
+  <text x="176" y="281" class="small muted">你的收音方式、翻譯偏好與 AI 回答助手。</text>
+  <path d="M176 308h736" stroke="#25344B"/>
+
+  <circle cx="188" cy="340" r="12" fill="#142D41"/>
+  <text x="188" y="345" text-anchor="middle" font-size="12" font-weight="700" class="accent">1</text>
+  <text x="212" y="346" font-size="17" font-weight="650">收音與語言</text>
+  <text x="176" y="383" class="label">麥克風來源</text>
+  <text x="552" y="383" class="label">辨識語言 → 翻譯語言</text>
+  <rect x="176" y="396" width="352" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <use href="#mic" x="192" y="410" width="23" height="23" color="#A2B1C8"/>
+  <text x="229" y="428" class="body">系統預設麥克風</text>
+  <rect x="552" y="396" width="360" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <text x="568" y="428" class="body">English</text>
+  <use href="#arrow" x="666" y="410" width="24" height="24" color="#A2B1C8"/>
+  <text x="712" y="428" class="body">繁體中文</text>
+  <text x="176" y="473" class="small muted">按下開始後，才會要求麥克風權限。</text>
+
+  <rect x="176" y="494" width="736" height="82" rx="12" fill="#102738" stroke="#386079"/>
+  <circle cx="200" cy="521" r="8" fill="#101A2B" stroke="#54DAFF" stroke-width="1.8"/>
+  <circle cx="200" cy="521" r="4" fill="#54DAFF"/>
+  <text x="220" y="527" class="body" font-weight="600">本機翻譯</text>
+  <rect x="314" y="507" width="62" height="24" rx="12" fill="#1A3D50"/>
+  <text x="345" y="524" text-anchor="middle" font-size="12" font-weight="650" class="accent">建議</text>
+  <text x="392" y="527" font-size="14" class="muted">需瀏覽器支援</text>
+  <text x="220" y="553" class="small muted">開始前檢查支援狀態；若無法使用，可改選雲端翻譯。</text>
+  <text x="826" y="527" font-size="14" font-weight="600" class="accent">切換</text>
+  <use href="#chevron" x="866" y="508" width="24" height="24" color="#54DAFF"/>
+
+  <circle cx="188" cy="614" r="12" fill="#302846"/>
+  <text x="188" y="619" text-anchor="middle" font-size="12" font-weight="700" class="ai">2</text>
+  <text x="212" y="620" font-size="17" font-weight="650" class="ai">AI 回答助手</text>
+  <text x="176" y="657" class="label">連線方式</text>
+  <text x="424" y="657" class="label">AI 服務</text>
+  <rect x="176" y="670" width="224" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <text x="192" y="702" font-size="15">安全代理（建議）</text>
+  <use href="#chevron" x="360" y="684" width="24" height="24" color="#A2B1C8"/>
+  <rect x="424" y="670" width="488" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <text x="440" y="702" class="body">OpenAI · 省費模式</text>
+  <use href="#chevron" x="872" y="684" width="24" height="24" color="#A2B1C8"/>
+  <text x="176" y="757" class="label">服務位址</text>
+  <text x="600" y="757" class="label">存取碼</text>
+  <rect x="176" y="770" width="400" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <text x="192" y="802" font-size="15" class="muted">https://your-api.example.com</text>
+  <rect x="600" y="770" width="312" height="52" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <text x="616" y="802" font-size="16" letter-spacing="3" class="muted">••••••••••••</text>
+  <use href="#eye" x="872" y="784" width="24" height="24" color="#A2B1C8"/>
+  <use href="#shield" x="176" y="835" width="17" height="17" color="#A2B1C8"/>
+  <text x="202" y="849" class="small muted">供應商金鑰留在代理端。個人自用可切換自備金鑰模式。</text>
+  <path d="M176 875h736" stroke="#25344B"/>
+  <text x="176" y="913" class="body" font-weight="600">加入個人背景</text>
+  <text x="302" y="913" font-size="14" class="muted">選填 · 讓建議更貼近你的經驗</text>
+  <path d="M880 898v16m-8-8h16" stroke="#54DAFF" stroke-width="1.8" stroke-linecap="round"/>
+
+  <rect x="968" y="208" width="424" height="606" rx="20" fill="#101A2B" stroke="#2C3F59"/>
+  <text x="1000" y="254" font-size="20" font-weight="650">準備好，從容開始</text>
+  <text x="1000" y="282" class="small muted">一個畫面，跟上問題與回答。</text>
+  <path d="M1018 334v126" stroke="#314D69" stroke-width="2"/>
+  <circle cx="1018" cy="328" r="18" fill="#142D41"/>
+  <use href="#mic" x="1008" y="317" width="20" height="22" color="#54DAFF"/>
+  <text x="1052" y="327" class="body" font-weight="600">聽懂當下</text>
+  <text x="1052" y="350" class="small muted">同步顯示英文與繁體中文</text>
+  <circle cx="1018" cy="397" r="18" fill="#142D41"/>
+  <path d="M1010 389h6m-6 0v6m16 10h-6m6 0v-6m-14-8 10 10" stroke="#54DAFF" fill="none" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="1052" y="396" class="body" font-weight="600">選取問題</text>
+  <text x="1052" y="419" class="small muted">反白文字，或直接選取整段</text>
+  <circle cx="1018" cy="466" r="18" fill="#142D41"/>
+  <path d="M1010 459h16v11h-10l-5 4v-4h-1Zm4 4h8m-8 3h5" stroke="#54DAFF" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1052" y="465" class="body" font-weight="600">整理成你的回答</text>
+  <text x="1052" y="488" class="small muted">英文建議搭配中文思路</text>
+  <path d="M1000 525h360" stroke="#25344B"/>
+  <text x="1000" y="566" font-size="17" font-weight="650">設定費用提醒</text>
+  <text x="1000" y="596" class="small muted">以 1 小時訪談為參考</text>
+  <text x="1000" y="633" class="label">本次預算</text>
+  <rect x="1000" y="646" width="360" height="56" rx="10" fill="#0C1524" stroke="#526B88"/>
+  <text x="1016" y="681" font-size="14" font-weight="600" class="muted">USD</text>
+  <text x="1344" y="683" text-anchor="end" font-size="26" font-weight="600">0.50</text>
+  <text x="1000" y="735" class="label muted">依模式與回答次數估算</text>
+  <text x="1000" y="761" class="small muted">開始後顯示 token 用量與累積預估費用。</text>
+  <text x="1000" y="783" class="small muted">接近預算時提醒；達上限暫停付費請求。</text>
+  <rect x="968" y="838" width="424" height="60" rx="12" fill="#54DAFF"/>
+  <use href="#mic" x="1087" y="857" width="21" height="23" color="#071420"/>
+  <text x="1122" y="875" font-size="18" font-weight="650" class="on-accent">開始聆聽</text>
+  <use href="#arrow" x="1336" y="856" width="24" height="24" color="#071420"/>
+  <text x="1180" y="925" text-anchor="middle" class="small muted">進入訪談工作區，隨時可暫停。</text>
+  <text x="144" y="979" font-size="12" class="muted">AOA · 讓理解與表達，保持在同一頁。</text>
+</svg>

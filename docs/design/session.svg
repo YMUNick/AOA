@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" role="img" aria-labelledby="title desc">
+  <title id="title">AOA 訪談工作區設計預覽</title>
+  <desc id="desc">靜態範例介面。左側為英文逐字稿與繁體中文翻譯，選取問題後，右側顯示英文回答建議及中文提示。底部有時間、範例 token 與成本、暫停及結束操作。畫面未連接麥克風或 AI 服務。</desc>
+  <defs>
+    <style>
+      text{font-family:system-ui,'Microsoft JhengHei','Noto Sans TC',sans-serif;fill:#ECF3FF}
+      .muted{fill:#A2B1C8}.accent{fill:#54DAFF}.on-accent{fill:#071420}.ai{fill:#B9A1FF}.light{fill:#ECF3FF}.small{font-size:13px}.label{font-size:14px;font-weight:600}.body{font-size:16px}.eyebrow{font-size:11px;font-weight:700;letter-spacing:2px}
+      .icon{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3Zm6 10v-7h6v7" class="icon"/></symbol>
+    <symbol id="lines" viewBox="0 0 24 24"><path d="M5 5h14M5 12h14M5 19h9" class="icon"/></symbol>
+    <symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="icon"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2.5M12 17h.01" class="icon"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" class="icon"/></symbol>
+    <symbol id="copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2" class="icon"/><path d="M15 8V3H3v12h5" class="icon"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4ZM20 2v4m-2-2h4" class="icon"/></symbol>
+  </defs>
+  <rect width="1440" height="1000" fill="#070D18"/>
+  <rect width="96" height="1000" fill="#0B1423"/>
+  <path d="M96 0v1000" stroke="#2C3F59"/>
+  <rect x="25" y="28" width="46" height="46" rx="14" fill="#54DAFF"/>
+  <path d="m35 58 7-17 7 17m-12-5h10m4 5 7-17 7 17m-12-5h10" stroke="#071420" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <use href="#home" x="36" y="136" width="24" height="24" color="#A2B1C8"/>
+  <text x="48" y="181" text-anchor="middle" font-size="12" class="muted">開始</text>
+  <rect x="16" y="211" width="64" height="72" rx="14" fill="#142D41"/>
+  <use href="#lines" x="36" y="223" width="24" height="24" color="#54DAFF"/>
+  <text x="48" y="268" text-anchor="middle" font-size="12" font-weight="600" class="accent">訪談</text>
+  <use href="#help" x="36" y="906" width="24" height="24" color="#A2B1C8"/>
+  <text x="48" y="951" text-anchor="middle" font-size="12" class="muted">使用說明</text>
+
+  <text x="136" y="47" class="eyebrow muted">AOA / INTERVIEW WORKSPACE</text>
+  <rect x="1160" y="25" width="232" height="32" rx="16" fill="#1A2539"/>
+  <circle cx="1178" cy="41" r="3" fill="#A2B1C8"/>
+  <text x="1190" y="46" class="small muted">設計預覽 · 範例內容</text>
+  <text x="136" y="102" font-size="28" font-weight="650" letter-spacing="-.5">跟上對話，想好再回答。</text>
+  <rect x="136" y="122" width="128" height="28" rx="14" fill="#142D41"/>
+  <circle cx="151" cy="136" r="4" fill="#54DAFF"/>
+  <text x="163" y="141" font-size="12" font-weight="650" class="accent">聆聽中 · 示例</text>
+  <text x="280" y="141" class="small muted">English → 繁體中文</text>
+  <path d="M466 128v16" stroke="#34475F"/>
+  <text x="482" y="141" class="small muted">本機翻譯</text>
+  <rect x="1248" y="99" width="144" height="44" rx="10" fill="#101A2B" stroke="#526B88"/>
+  <path d="M1265 121h19m-15-7v14m11-14v14" stroke="#A2B1C8" stroke-width="1.5" fill="none"/>
+  <text x="1298" y="127" font-size="14" font-weight="600">本次設定</text>
+
+  <rect x="136" y="176" width="648" height="712" rx="18" fill="#101A2B" stroke="#2C3F59"/>
+  <text x="164" y="216" font-size="19" font-weight="650">即時逐字稿</text>
+  <text x="164" y="242" class="small muted">反白任何文字，或按「選取整段」取得回答建議。</text>
+  <rect x="655" y="195" width="101" height="34" rx="8" fill="#1B2A40"/>
+  <text x="705" y="217" text-anchor="middle" font-size="12" font-weight="600" class="muted">雙語顯示</text>
+  <path d="M136 264h648" stroke="#25344B"/>
+  <text x="164" y="296" font-size="12" font-weight="600" class="muted">00:10:42 · 已完成</text>
+  <text x="164" y="334" font-size="18">What interests you most about this role?</text>
+  <text x="164" y="369" font-size="16" class="muted">這個職位最吸引你的地方是什麼？</text>
+  <rect x="164" y="391" width="110" height="36" rx="8" fill="#101A2B" stroke="#526B88"/>
+  <text x="219" y="414" text-anchor="middle" font-size="13" font-weight="600" class="muted">選取整段</text>
+  <path d="M164 451h592" stroke="#25344B"/>
+
+  <rect x="152" y="475" width="616" height="234" rx="12" fill="#112637" stroke="#386079"/>
+  <rect x="152" y="491" width="3" height="202" rx="1.5" fill="#54DAFF"/>
+  <text x="176" y="506" font-size="12" font-weight="600" class="accent">00:11:54 · 已選取</text>
+  <rect x="172" y="527" width="548" height="31" rx="3" fill="#20465E"/>
+  <rect x="172" y="560" width="124" height="31" rx="3" fill="#20465E"/>
+  <text x="176" y="549" font-size="19" font-weight="550">Tell me about a time you handled a tight</text>
+  <text x="176" y="582" font-size="19" font-weight="550">deadline.</text>
+  <text x="176" y="619" font-size="16">請分享一次你應對緊迫期限的經驗。</text>
+  <rect x="176" y="644" width="142" height="42" rx="9" fill="#B9A1FF"/>
+  <use href="#spark" x="188" y="656" width="18" height="18" color="#071420"/>
+  <text x="217" y="671" font-size="14" font-weight="600" class="on-accent">建議回答</text>
+  <text x="336" y="671" font-size="13" class="muted">已用此段產生右側示例</text>
+
+  <text x="164" y="749" font-size="12" font-weight="600" class="muted">00:12:08 · 辨識中（示例）</text>
+  <text x="164" y="785" font-size="18" class="muted">How did you decide what to prioritize?</text>
+  <rect x="164" y="801" width="4" height="18" rx="2" fill="#54DAFF"/>
+  <text x="180" y="815" class="small muted">等待句子完成後翻譯…</text>
+  <path d="M136 840h648" stroke="#25344B"/>
+  <path d="m164 863 5 5 9-9" stroke="#54DAFF" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="190" y="869" class="small muted">選取文字時，畫面保持原位</text>
+  <text x="754" y="869" text-anchor="end" class="small accent" font-weight="650">回到最新 ↓</text>
+
+  <rect x="808" y="176" width="584" height="712" rx="18" fill="#101A2B" stroke="#2C3F59"/>
+  <use href="#spark" x="836" y="196" width="23" height="23" color="#B9A1FF"/>
+  <text x="872" y="216" font-size="19" font-weight="650">回答助手</text>
+  <rect x="1288" y="195" width="76" height="28" rx="14" fill="#1A2539"/>
+  <text x="1326" y="214" text-anchor="middle" font-size="12" font-weight="600" class="muted">示例</text>
+  <text x="836" y="242" class="small muted">OpenAI · 省費模式 · 依選取內容產生</text>
+  <path d="M808 264h584" stroke="#25344B"/>
+  <text x="836" y="296" font-size="12" font-weight="650" class="muted">目前問題</text>
+  <text x="836" y="325" font-size="15">Tell me about a time you handled a tight deadline.</text>
+  <path d="M836 349h528" stroke="#25344B"/>
+  <text x="836" y="380" class="label ai">英文回答</text>
+  <text x="1364" y="380" text-anchor="end" font-size="12" class="muted">精簡 · 約 45 秒</text>
+  <text x="836" y="419" font-size="18">“In my last role, we had an important</text>
+  <text x="836" y="449" font-size="18">delivery with a very short deadline. I broke</text>
+  <text x="836" y="479" font-size="18">the work into priorities, agreed on the</text>
+  <text x="836" y="509" font-size="18">essentials with my team, and shared</text>
+  <text x="836" y="539" font-size="18">progress every day. When a risk came up,</text>
+  <text x="836" y="569" font-size="18">I raised it early and adjusted the plan.</text>
+  <text x="836" y="599" font-size="18">We delivered the key work on time.”</text>
+  <rect x="836" y="622" width="528" height="112" rx="12" fill="#1B233B"/>
+  <text x="856" y="650" class="label">中文思路</text>
+  <text x="856" y="678" font-size="14" class="muted">先說情境，再說排序、溝通與風險處理。</text>
+  <text x="856" y="704" font-size="14" class="muted">這是示例；請換成你的真實專案與具體結果。</text>
+  <rect x="836" y="757" width="158" height="44" rx="9" fill="#101A2B" stroke="#526B88"/>
+  <use href="#copy" x="850" y="769" width="20" height="20" color="#A2B1C8"/>
+  <text x="883" y="785" font-size="14" font-weight="600">複製英文</text>
+  <rect x="1006" y="757" width="104" height="44" rx="9" fill="#101A2B" stroke="#526B88"/>
+  <text x="1058" y="785" text-anchor="middle" font-size="14" font-weight="600">再簡短些</text>
+  <rect x="1122" y="757" width="104" height="44" rx="9" fill="#101A2B" stroke="#526B88"/>
+  <text x="1174" y="785" text-anchor="middle" font-size="14" font-weight="600">重新產生</text>
+  <path d="M808 840h584" stroke="#25344B"/>
+  <circle cx="842" cy="864" r="4" fill="#54DAFF"/>
+  <text x="856" y="869" class="small muted">只在你提出請求時產生 AI 回答</text>
+
+  <rect x="136" y="912" width="1256" height="64" rx="14" fill="#101A2B" stroke="#2C3F59"/>
+  <circle cx="162" cy="944" r="4" fill="#54DAFF"/>
+  <text x="176" y="950" font-size="17" font-weight="600">00:12:08</text>
+  <text x="269" y="949" font-size="12" class="muted">示例</text>
+  <path d="M318 929v30" stroke="#2C3F59"/>
+  <text x="340" y="939" font-size="11" class="muted">預估費用 · 示例</text>
+  <text x="340" y="960" font-size="17" font-weight="650">USD 0.01</text>
+  <text x="472" y="940" font-size="12" class="muted">輸入 1,600 / 輸出 400 tokens</text>
+  <text x="472" y="959" font-size="12" class="muted">預算 USD 0.50 · 接近時提醒</text>
+  <rect x="1120" y="922" width="112" height="44" rx="9" fill="#101A2B" stroke="#526B88"/>
+  <path d="M1139 936v16m6-16v16" stroke="#ECF3FF" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="1160" y="951" font-size="14" font-weight="600">暫停</text>
+  <rect x="1244" y="922" width="132" height="44" rx="9" fill="#2C2034" stroke="#9A6F8B"/>
+  <rect x="1259" y="938" width="12" height="12" rx="2" fill="#ECF3FF"/>
+  <text x="1284" y="951" font-size="14" font-weight="600" class="light">結束訪談</text>
+</svg>

@@ -1,0 +1,20 @@
+{
+  "name": "aoa-private-gateway",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run src/index.test.ts",
+    "test:runtime": "node scripts/runtime-smoke.mjs",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261012.0-beta",
+    "wrangler": "4.151.0"
+  }
+}

@@ -1,0 +1,20 @@
+name = "aoa-private-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-10-14"
+compatibility_flags = ["enable_request_signal", "request_signal_passthrough"]
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://ymunick.github.io"
+ACCOUNT_DAILY_BUDGET_USD = "2"
+
+[[durable_objects.bindings]]
+name = "BUDGET"
+class_name = "AccountBudget"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AccountBudget"]
+
+[observability]
+enabled = false
