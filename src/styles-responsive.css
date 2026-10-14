@@ -2,6 +2,28 @@
 .prior-question { min-width: 0; overflow-wrap: anywhere; }
 .mobile-usage-details { display: none; }
 
+/* Highlighting a selection must not move the native text-selection handles. */
+.transcript-row { --row-padding: 24px 10px 22px; }
+.transcript-row.selected {
+  margin: 0;
+  padding: var(--row-padding);
+  border: 0;
+  border-bottom: 1px solid #25344b;
+  box-shadow: inset 0 0 0 1px #386079;
+}
+@media (max-width: 950px) { .transcript-row { --row-padding: 20px 8px; } }
+@media (max-width: 560px) { .transcript-row { --row-padding: 22px 8px; } }
+@media (max-width: 360px) { .transcript-row { --row-padding: 16px 8px 22px; } }
+
+/* During text entry, let the browser pan the whole form above its keyboard. */
+@media (max-width: 950px), (pointer: coarse) {
+  .workspace-page:has(.manual-input:focus-within) .session-controls { position: static; }
+  .workspace-page .transcript-panel:has(.manual-input:focus-within) { height: auto; max-height: none; }
+  .transcript-panel:has(.manual-input:focus-within) .transcript-scroll { flex: none; max-height: 180px; }
+  .manual-input textarea { scroll-margin-block: 90px; }
+  .manual-actions { display: flex; align-items: center; gap: 8px; }
+}
+
 @media (max-width: 950px), (pointer: coarse) {
   .app-shell button.button,
   .app-shell button.text-button,

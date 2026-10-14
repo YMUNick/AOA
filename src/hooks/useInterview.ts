@@ -66,7 +66,7 @@ export function useInterview() {
   const ledger = useRef<BudgetLedger | null>(null);
   const generation = useRef(0);
   const translationEpoch = useRef(0);
-  const elapsedRef = useRef(0);
+  const clock = useRef<{ accumulatedMs: number; startedAt: number | null }>({ accumulatedMs: 0, startedAt: null });
   const demoRef = useRef(false);
   const endedRef = useRef(false);
   const segmentsRef = useRef<TranscriptSegment[]>([]);
@@ -75,6 +75,19 @@ export function useInterview() {
   const aborters = useRef(new Map<AbortController, { ledger: BudgetLedger; requestId: string }>());
   const answerAbort = useRef<AbortController | null>(null);
   const seen = useRef(new Set<string>());
+  const updateElapsed = useCallback(() => {
+    const activeMs = clock.current.startedAt === null ? 0 : Math.max(0, performance.now() - clock.current.startedAt);
+    const seconds = Math.floor((clock.current.accumulatedMs + activeMs) / 1000);
+    setElapsed(seconds);
+    return seconds;
+  }, []);
+  const pauseClock = useCallback(() => {
+    if (clock.current.startedAt !== null) {
+      clock.current.accumulatedMs += Math.max(0, performance.now() - clock.current.startedAt);
+      clock.current.startedAt = null;
+    }
+    updateElapsed();
+  }, [updateElapsed]);
   const updateUsage = useCallback(() => { if (ledger.current) setUsage({ ...ledger.current.snapshot }); }, []);
   const updateConnection = useCallback((credentials: Pick<Settings, 'apiKey' | 'sessionToken' | 'accessCode'>): void => {
     if (!settingsRef.current) return;
@@ -99,11 +112,13 @@ export function useInterview() {
     for (const controller of aborters.current.keys()) cancelRequest(controller);
   }, [cancelRequest]);
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
+  const clockRunning = hasSession && !ended && speechState !== 'paused';
   useEffect(() => {
-    if (!hasSession || ended || speechState === 'paused') return;
-    const timer = window.setInterval(() => { elapsedRef.current += 1; setElapsed(elapsedRef.current); }, 1000);
+    if (!clockRunning) return;
+    // The interval refreshes the display; monotonic time, not callback count, measures duration.
+    const timer = window.setInterval(updateElapsed, 1000);
     return () => clearInterval(timer);
-  }, [hasSession, ended, speechState]);
+  }, [clockRunning, updateElapsed]);
   useEffect(() => () => { generation.current++; translationEpoch.current++; speech.current?.stop(); cancelRequests(); }, [cancelRequests]);
 
   const translate = useCallback((id: string, text: string, gen: number) => {
@@ -150,13 +165,14 @@ export function useInterview() {
     seen.current.add(id);
     const mode = demoRef.current || endedRef.current ? 'off' : settingsRef.current?.translationMode || 'off';
     const chunks = splitTranscript(clean);
+    const time = updateElapsed();
     const added: TranscriptSegment[] = chunks.map((english, index) => ({
-      id: chunks.length === 1 ? id : `${id}:part-${index}`, english, chinese: '', time: elapsedRef.current,
+      id: chunks.length === 1 ? id : `${id}:part-${index}`, english, chinese: '', time,
       translationState: mode === 'off' ? 'off' : 'pending',
     }));
     setSegments(rows => [...rows, ...added]);
     if (mode !== 'off') for (const row of added) translate(row.id, row.english, generation.current);
-  }, [translate]);
+  }, [translate, updateElapsed]);
 
   const start = useCallback((settings: Settings, demo: boolean, translator: LocalTranslator | null) => {
     const nextLedger = new BudgetLedger(settings.budgetUsd, settings.provider);
@@ -164,7 +180,8 @@ export function useInterview() {
     answerAbort.current = null; queue.current = Promise.resolve(); seen.current = new Set(); pendingTranslations.current = new Set();
     settingsRef.current = { ...settings }; setSessionSettings({ ...settings }); local.current = translator;
     ledger.current = nextLedger; updateUsage();
-    elapsedRef.current = 0; setElapsed(0); setInterim(''); setError(''); setNotice('');
+    clock.current = { accumulatedMs: 0, startedAt: demo ? null : performance.now() };
+    setElapsed(0); setInterim(''); setError(''); setNotice('');
     setSelected(''); setSelectedId(''); setAnswer(''); setAnswerQuestion(''); setAnswerError(''); setAnswerBusy(false);
     setHasSession(true); setEnded(false); endedRef.current = false; demoRef.current = demo; setIsDemo(demo);
     if (demo) {
@@ -185,9 +202,16 @@ export function useInterview() {
     speech.current.start();
   }, [addSegment, cancelRequests, updateUsage]);
 
-  function pause() { if (endedRef.current) return; speech.current?.pause(); setSpeechState('paused'); setInterim(''); }
-  function resume() { if (endedRef.current) return; setError(''); if (demoRef.current) { setSpeechState('paused'); return; } speech.current?.start(); }
+  function pause() { if (endedRef.current) return; pauseClock(); speech.current?.pause(); setSpeechState('paused'); setInterim(''); }
+  function resume() {
+    if (endedRef.current) return;
+    setError('');
+    if (demoRef.current) { setSpeechState('paused'); return; }
+    if (clock.current.startedAt === null) clock.current.startedAt = performance.now();
+    speech.current?.start();
+  }
   function stop() {
+    pauseClock();
     endedRef.current = true; translationEpoch.current++; setEnded(true); speech.current?.stop(); setSpeechState('stopped'); setInterim('');
     cancelAnswer(); cancelRequests(); updateUsage();
     pendingTranslations.current = new Set(); queue.current = Promise.resolve();

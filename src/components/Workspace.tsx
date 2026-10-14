@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowLeft, Check, Copy, Download, FileText, LoaderCircle, Mic, Pause, Play, RotateCcw, Send, Settings2, Sparkles, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { useInterview } from '../hooks/useInterview';
+import { useTranscriptSelection } from '../hooks/useTranscriptSelection';
 import { exportTranscript, formatMoney, formatTime } from '../lib/session';
 
 type Interview = ReturnType<typeof useInterview>;
@@ -9,21 +10,13 @@ export function Workspace({ session: s, onSettings }: { session: Interview; onSe
   const [tab, setTab] = useState<'transcript' | 'answer'>('transcript');
   const [follow, setFollow] = useState(true), [copied, setCopied] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
+  const readSelection = useTranscriptSelection(scroll, { onSelect: text => s.select(text), onSelectionStart: () => setFollow(false) });
   const status = s.isDemo ? '示範模式' : ({ idle: '尚未開始', requesting: '等待麥克風權限', listening: '聆聽中', reconnecting: '正在重新連線', paused: '已暫停', stopped: '已結束', error: '需要處理' }[s.speechState]);
   const spend = s.usage.spent + s.usage.reserved, budget = s.sessionSettings?.budgetUsd || .5;
   useEffect(() => { if (follow && !window.getSelection()?.toString()) scrollToLatest(); }, [s.segments, s.interim, follow]);
   function scrollToLatest() {
     const element = scroll.current;
     element?.scrollTo({ top: element.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-  }
-  function readSelection() {
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount || !selection.toString().trim()) return;
-    const range = selection.getRangeAt(0);
-    const container = scroll.current;
-    if (!container?.contains(range.startContainer) || !container.contains(range.endContainer)) return;
-    const text = selection.toString().trim();
-    s.select(text); setFollow(false);
   }
   function choose(text: string, id: string) { s.select(text, id); setFollow(false); }
   async function copy() { try { await navigator.clipboard.writeText(s.answer); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setCopied(false); } }
@@ -38,7 +31,7 @@ export function Workspace({ session: s, onSettings }: { session: Interview; onSe
     <div className="workspace-grid">
       <section className={`panel transcript-panel ${tab !== 'transcript' ? 'mobile-hidden' : ''}`} aria-labelledby="transcript-heading">
         <div className="panel-heading"><div><h2 id="transcript-heading">即時逐字稿</h2><p>反白文字，或選取整段取得回答建議。</p></div><button className="button compact" onClick={() => setManual(!manual)} aria-expanded={manual}><FileText size={15}/>貼上英文</button></div>
-        {manual && <div className="manual-input"><label htmlFor="manual-text">貼上要翻譯的英文</label><textarea id="manual-text" autoFocus maxLength={1600} rows={3} value={manualText} placeholder="輸入面試問題，沒有麥克風也能使用。" onChange={e => setManualText(e.target.value)}/><div><small>{manualText.length} / 1,600</small><button className="button compact primary" disabled={!manualText.trim()} onClick={submitManual}><Send size={14}/>加入字幕</button></div></div>}
+        {manual && <div className="manual-input"><label htmlFor="manual-text">貼上要翻譯的英文</label><textarea id="manual-text" autoFocus maxLength={1600} rows={3} value={manualText} placeholder="輸入面試問題，沒有麥克風也能使用。" onChange={e => setManualText(e.target.value)}/><div><small>{manualText.length} / 1,600</small><span className="manual-actions"><button className="button compact" onClick={() => setManual(false)}>收起</button><button className="button compact primary" disabled={!manualText.trim()} onClick={submitManual}><Send size={14}/>加入字幕</button></span></div></div>}
         <div ref={scroll} role="log" aria-label="英中逐字稿" aria-live="polite" aria-relevant="additions" className="transcript-scroll" onPointerUp={readSelection} onKeyUp={readSelection} onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)}>
           {!s.segments.length && !s.interim && <div className="empty-transcript"><div className="listening-orb"><Mic size={29}/><span/><span/></div><h3>{s.speechState === 'listening' ? '正在聽，請自然說話。' : '從一句英文開始。'}</h3><p>對話會出現在這裡。<br/>你也可以貼上英文，先試一個問題。</p><button className="button secondary" onClick={() => setManual(true)}><FileText size={16}/>貼上英文問題</button></div>}
           {s.segments.map(row => <article className={`transcript-row ${s.selectedId === row.id ? 'selected' : ''}`} key={row.id}><div className="transcript-time">{formatTime(row.time)} · {s.selectedId === row.id ? '已選取' : s.isDemo ? '示範內容' : '已完成'}</div><p className="english">{row.english}</p>{row.chinese && <p className="chinese">{row.chinese}</p>}{row.translationState === 'pending' && <p className="translation-progress"><LoaderCircle size={13} className="spin"/>翻譯中…</p>}{row.translationState === 'error' && <div className="row-error"><span>{row.error}</span><button className="text-button" disabled={s.ended} onClick={() => s.retryTranslation(row)}><RotateCcw size={13}/>重試</button></div>}<button className={`button compact ${s.selectedId === row.id ? 'ai-button' : 'select-button'}`} onClick={() => choose(row.english, row.id)}>{s.selectedId === row.id ? <Check size={14}/> : null}{s.selectedId === row.id ? '已選取此段' : '選取整段'}</button></article>)}
