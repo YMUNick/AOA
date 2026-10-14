@@ -22,6 +22,7 @@ interface Recognition {
   maxAlternatives: number;
   onstart: (() => void) | null;
   onend: (() => void) | null;
+  onnomatch: (() => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onresult: ((event: RecognitionEvent) => void) | null;
   start(): void;
@@ -46,6 +47,11 @@ function recognitionConstructor(): RecognitionConstructor | undefined {
   if (typeof browser.SpeechRecognition === 'function') return browser.SpeechRecognition;
   if (typeof browser.webkitSpeechRecognition === 'function') return browser.webkitSpeechRecognition;
   return undefined;
+}
+
+function isAndroidBrowser(): boolean {
+  const browserNavigator = globalThis.navigator as (Navigator & { userAgentData?: { platform?: string } }) | undefined;
+  return /Android/i.test(browserNavigator?.userAgentData?.platform || browserNavigator?.userAgent || '');
 }
 
 export class SpeechController {
@@ -86,7 +92,7 @@ export class SpeechController {
     const previous = this.recognition;
     this.recognition = null;
     if (previous) {
-      previous.onstart = previous.onend = previous.onerror = previous.onresult = null;
+      previous.onstart = previous.onend = previous.onnomatch = previous.onerror = previous.onresult = null;
       try { previous.abort(); } catch { /* An already-ended recognizer needs no further cleanup. */ }
     }
   }
@@ -96,11 +102,11 @@ export class SpeechController {
     this.callbacks.onError(message);
   }
 
-  private retry(silence = false): void {
+  private retry(reason: 'failure' | 'silence' | 'completed' = 'failure'): void {
     this.invalidate();
     if (!this.wantsListening) return;
-    // A quiet microphone is expected during an interview; only failures spend retries.
-    const delay = silence ? 1_000 : RETRY_DELAYS[this.retries++];
+    // Silence and completed utterances are expected; only failures spend retries.
+    const delay = reason === 'silence' ? 1_000 : reason === 'completed' ? 500 : RETRY_DELAYS[this.retries++];
     if (delay === undefined) {
       this.fail('語音辨識多次中斷，已停止自動重試。請檢查網路與麥克風，再手動重新開始。');
       return;
@@ -127,16 +133,21 @@ export class SpeechController {
       const seen = new Set<number>();
       const current = () => this.wantsListening && this.generation === generation && this.recognition === recognition;
       recognition.lang = 'en-US';
-      recognition.continuous = true;
+      // Android continuous mode can mark partial phrases final; our end handler resumes listening.
+      recognition.continuous = !isAndroidBrowser();
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.onstart = () => { if (current()) this.callbacks.onState('listening'); };
-      recognition.onend = () => { if (current()) this.retry(); };
+      recognition.onend = () => {
+        if (current()) this.retry(!recognition.continuous && seen.size > 0 ? 'completed' : 'failure');
+      };
+      // Android can end an unmatched utterance without an error; wait without spending failure retries.
+      recognition.onnomatch = () => { if (current()) this.retry('silence'); };
       recognition.onerror = event => {
         if (!current()) return;
         const fatal = FATAL_ERRORS[event.error];
         if (fatal) this.fail(fatal);
-        else this.retry(event.error === 'no-speech');
+        else this.retry(event.error === 'no-speech' ? 'silence' : 'failure');
       };
       recognition.onresult = event => {
         if (!current() || !event.results) return;
