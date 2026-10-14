@@ -190,6 +190,11 @@ export function useInterview() {
       setSpeechState('paused'); setSelected(DEMO_SEGMENTS[1].english); setSelectedId('demo-1');
       setNotice('這是示範內容，沒有啟用麥克風，也不會呼叫付費 API。'); return;
     }
+    if (settings.translationMode === 'off') {
+      setNotice('中文未啟用，本次只顯示英文字幕。請在新訪談前準備好本機翻譯，或設定 API 金鑰／代理並手動選擇付費雲端翻譯。');
+    } else if (settings.translationMode === 'local' && !translator) {
+      setNotice('中文翻譯目前無法使用：本機翻譯尚未就緒或此裝置不支援。請準備好本機翻譯，或設定 API 金鑰／代理並手動選擇付費雲端翻譯後，開始新訪談。');
+    }
     segmentsRef.current = []; setSegments([]);
     if (!SpeechController.isSupported()) { setSpeechState('error'); setError('此瀏覽器不支援語音辨識。請改用桌面 Chrome，或按「貼上英文」繼續。'); return; }
     const gen = generation.current;

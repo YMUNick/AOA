@@ -27,121 +27,140 @@ function viewport(mobile: boolean) {
   })));
 }
 function transcript() { return within(screen.getByRole('log', { name: '英中逐字稿' })); }
-beforeEach(() => { viewport(true); Element.prototype.scrollTo = vi.fn(); });
+let resizeContent: () => void;
+beforeEach(() => {
+  viewport(true);
+  resizeContent = () => {};
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
+  Element.prototype.scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
+    this.scrollTop = Math.min(this.scrollHeight - this.clientHeight, typeof options === 'object' ? options.top ?? 0 : 0);
+  });
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: ResizeObserverCallback) { resizeContent = () => callback([], this as unknown as ResizeObserver); }
+    observe() {} disconnect() {} unobserve() {}
+  });
+});
 afterEach(() => { cleanup(); window.getSelection()?.removeAllRanges(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+function log() { return screen.getByRole('log', { name: '英中逐字稿' }); }
+function grow(height: number) { Object.defineProperty(log(), 'scrollHeight', { configurable: true, value: height }); }
+function selectText(text: Node) {
+  act(() => {
+    const range = document.createRange(); range.setStart(text, 0); range.setEnd(text, 6);
+    window.getSelection()!.addRange(range); document.dispatchEvent(new Event('selectionchange'));
+  });
+}
 
-describe('mobile caption reading', () => {
-  it.each(['touchMove', 'wheel'] as const)('does not pin an empty caption after %s before speech arrives', event => {
-    const s = session({ segments: [], interim: '' }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    fireEvent[event](screen.getByRole('log', { name: '英中逐字稿' }));
-    view.rerender(<Workspace session={{ ...s, interim: 'First spoken words' }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText('First spoken words')).toBeTruthy();
-    view.rerender(<Workspace session={{ ...s, segments: [first], interim: '' }} onSettings={vi.fn()}/>);
+describe('accumulating bilingual transcript', () => {
+  it.each([true, false])('appends every bilingual row and follows its bottom with mobile=%s', mobile => {
+    viewport(mobile); const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
     expect(transcript().getByText(first.english)).toBeTruthy();
+    expect(transcript().getByText(first.chinese)).toBeTruthy();
+    expect(transcript().getByText(latest.english)).toBeTruthy();
+    expect(log().scrollTop).toBe(800);
+    grow(1300);
+    view.rerender(<Workspace session={{ ...s, segments: [...s.segments, next] }} onSettings={vi.fn()}/>);
+    expect(transcript().getAllByRole('article')).toHaveLength(3);
+    expect(transcript().getByText(next.chinese)).toBeTruthy();
+    expect(log().scrollTop).toBe(1100);
+    expect(screen.queryByRole('button', { name: /歷史字幕/ })).toBeNull();
+  });
+
+  it('keeps all completed captions while updating one interim paragraph in place', () => {
+    const s = session({ interim: 'Tell me' }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    const interim = transcript().getByText('Tell me');
+    view.rerender(<Workspace session={{ ...s, interim: 'Tell me more' }} onSettings={vi.fn()}/>);
+    expect(transcript().getByText('Tell me more')).toBe(interim);
+    expect(transcript().getAllByRole('article')).toHaveLength(3);
     expect(transcript().getByText(first.chinese)).toBeTruthy();
   });
 
-  it('shows only the latest completed caption, with earlier captions available in history', () => {
-    const s = session(); render(<Workspace session={s} onSettings={vi.fn()}/>);
-    expect(transcript().queryByText(first.english)).toBeNull();
-    expect(transcript().getByText(latest.english)).toBeTruthy();
-    expect(transcript().getByText(latest.chinese)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '查看歷史字幕 (2)' }));
-    expect(transcript().getByText(first.english)).toBeTruthy();
-    fireEvent.click(transcript().getAllByRole('button', { name: '選取整段' })[0]);
-    expect(s.select).toHaveBeenCalledWith(first.english, first.id);
-    expect(s.ask).not.toHaveBeenCalled();
-    expect(s.retryTranslation).not.toHaveBeenCalled();
-    expect(s.segments).toHaveLength(2);
-  });
-
-  it('updates a single interim caption in place, then replaces it with its completed translation', () => {
-    const s = session({ interim: 'Tell me' }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    expect(transcript().queryByText(latest.english)).toBeNull();
-    const current = transcript().getByText('Tell me');
-    view.rerender(<Workspace session={{ ...s, interim: 'Tell me more about that' }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText('Tell me more about that')).toBe(current);
-    expect(transcript().getAllByRole('article')).toHaveLength(1);
-    view.rerender(<Workspace session={{ ...s, interim: '', segments: [...s.segments, next] }} onSettings={vi.fn()}/>);
-    expect(transcript().getAllByRole('article')).toHaveLength(1);
-    expect(transcript().getByText(next.english)).toBeTruthy();
-    expect(transcript().getByText(next.chinese)).toBeTruthy();
-  });
-
-  it('holds the chosen completed caption through incoming speech until returning to latest', () => {
+  it('keeps the reading position after an upward scroll while new rows still append', () => {
     const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    const paragraph = transcript().getByText(latest.english);
-    fireEvent.click(transcript().getByRole('button', { name: '選取整段' }));
-    view.rerender(<Workspace session={{ ...s, segments: [...s.segments, next], interim: 'Another question' }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText(latest.english)).toBe(paragraph);
-    expect(transcript().queryByText(next.english)).toBeNull();
-    expect(transcript().queryByText('Another question')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /回到最新/ }));
-    expect(transcript().queryByText(latest.english)).toBeNull();
-    expect(transcript().getByText('Another question')).toBeTruthy();
-  });
-
-  it('preserves native text nodes and ranges while newer captions arrive', () => {
-    const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    const text = transcript().getByText(latest.english).firstChild!;
-    act(() => {
-      const range = document.createRange(); range.setStart(text, 0); range.setEnd(text, 6);
-      window.getSelection()!.addRange(range); document.dispatchEvent(new Event('selectionchange'));
-    });
+    fireEvent.scroll(log(), { target: { scrollTop: 300 } });
+    grow(1400);
     view.rerender(<Workspace session={{ ...s, segments: [...s.segments, next], interim: 'More speech' }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText(latest.english).firstChild).toBe(text);
-    expect(window.getSelection()?.toString()).toBe('How do');
-    expect(window.getSelection()?.getRangeAt(0).startContainer).toBe(text);
-    expect(transcript().queryByText('More speech')).toBeNull();
+    act(() => resizeContent());
+    expect(log().scrollTop).toBe(300);
+    expect(transcript().getByText(next.chinese)).toBeTruthy();
+    expect(transcript().getByText('More speech')).toBeTruthy();
+    expect(screen.getByText('閱讀中，畫面保持原位')).toBeTruthy();
   });
 
-  it('freezes a caption as native selection begins, before handles have formed a range', () => {
+  it('resumes following with return-to-latest, and ignores its resulting scroll event', () => {
     const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    const text = transcript().getByText(latest.english).firstChild!;
-    act(() => text.dispatchEvent(new Event('selectstart', { bubbles: true })));
+    fireEvent.scroll(log(), { target: { scrollTop: 300 } });
+    fireEvent.click(screen.getByRole('button', { name: /回到最新/ }));
+    expect(log().scrollTop).toBe(800);
+    fireEvent.scroll(log());
+    grow(1200);
     view.rerender(<Workspace session={{ ...s, segments: [...s.segments, next] }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText(latest.english).firstChild).toBe(text);
-    expect(transcript().queryByText(next.english)).toBeNull();
+    expect(log().scrollTop).toBe(1000);
   });
 
-  it('receives a held caption translation without replacing its selected English text node', () => {
+  it('naturally resumes following when scrolling back down to the bottom', () => {
+    const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    fireEvent.scroll(log(), { target: { scrollTop: 300 } });
+    fireEvent.scroll(log(), { target: { scrollTop: 800 } });
+    grow(1200);
+    view.rerender(<Workspace session={{ ...s, interim: 'Next question' }} onSettings={vi.fn()}/>);
+    expect(log().scrollTop).toBe(1000);
+  });
+
+  it('preserves selected text and its scroll position when translation and newer rows arrive', () => {
     const pending = { ...latest, chinese: '', translationState: 'pending' as const };
     const s = session({ segments: [first, pending] }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
     const text = transcript().getByText(latest.english).firstChild!;
-    act(() => {
-      const range = document.createRange(); range.setStart(text, 0); range.setEnd(text, 6);
-      window.getSelection()!.addRange(range); document.dispatchEvent(new Event('selectionchange'));
-    });
+    selectText(text);
+    fireEvent.scroll(log(), { target: { scrollTop: 300 } });
+    fireEvent.scroll(log(), { target: { scrollTop: 800 } });
+    grow(1400);
     view.rerender(<Workspace session={{ ...s, segments: [first, latest, next], interim: 'More speech' }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText(latest.chinese)).toBeTruthy();
-    expect(transcript().queryByText('翻譯中…')).toBeNull();
+    act(() => resizeContent());
     expect(transcript().getByText(latest.english).firstChild).toBe(text);
     expect(window.getSelection()?.toString()).toBe('How do');
-    expect(transcript().queryByText(next.english)).toBeNull();
-  });
-
-  it('updates a held caption from a translation error through retry to success', () => {
-    const failed = { ...latest, chinese: '', translationState: 'error' as const, error: 'Translation interrupted' };
-    const s = session({ segments: [first, failed] }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
-    const paragraph = transcript().getByText(latest.english);
-    fireEvent.click(transcript().getByRole('button', { name: '選取整段' }));
-    fireEvent.click(transcript().getByRole('button', { name: '重試' }));
-    expect(s.retryTranslation).toHaveBeenCalledWith(failed);
-    view.rerender(<Workspace session={{ ...s, segments: [first, { ...latest, chinese: '', translationState: 'pending' }] }} onSettings={vi.fn()}/>);
-    expect(transcript().getByText('翻譯中…')).toBeTruthy();
-    expect(transcript().queryByText('Translation interrupted')).toBeNull();
-    view.rerender(<Workspace session={{ ...s, segments: [first, latest, next] }} onSettings={vi.fn()}/>);
     expect(transcript().getByText(latest.chinese)).toBeTruthy();
-    expect(transcript().queryByRole('button', { name: '重試' })).toBeNull();
-    expect(transcript().getByText(latest.english)).toBe(paragraph);
-    expect(transcript().queryByText(next.english)).toBeNull();
+    expect(transcript().getByText(next.chinese)).toBeTruthy();
+    expect(log().scrollTop).toBe(800);
   });
 
-  it('keeps the full transcript and interim visible on desktop', () => {
-    viewport(false); const s = session({ interim: 'More speech' }); render(<Workspace session={s} onSettings={vi.fn()}/>);
-    expect(transcript().getByText(first.english)).toBeTruthy();
-    expect(transcript().getByText(latest.english)).toBeTruthy();
-    expect(transcript().getByText('More speech')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /查看歷史字幕/ })).toBeNull();
+  it('does not resume from an unchanged scroll event after selecting a whole row', () => {
+    const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    fireEvent.click(transcript().getAllByRole('button', { name: '選取整段' })[0]);
+    fireEvent.scroll(log());
+    grow(1300);
+    view.rerender(<Workspace session={{ ...s, segments: [...s.segments, next] }} onSettings={vi.fn()}/>);
+    expect(log().scrollTop).toBe(800);
+    expect(transcript().getByText(next.english)).toBeTruthy();
+    expect(s.select).toHaveBeenCalledWith(first.english, first.id);
+    expect(s.ask).not.toHaveBeenCalled();
+  });
+
+  it('follows translated content growth only while following is enabled', () => {
+    render(<Workspace session={session()} onSettings={vi.fn()}/>);
+    grow(1200); act(() => resizeContent());
+    expect(log().scrollTop).toBe(1000);
+    fireEvent.scroll(log(), { target: { scrollTop: 250 } });
+    grow(1400); act(() => resizeContent());
+    expect(log().scrollTop).toBe(250);
+  });
+
+  it('does not treat a hidden panel resetting its scroll position as an upward reading gesture', () => {
+    const s = session(); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    Object.defineProperty(log(), 'clientHeight', { configurable: true, value: 0 });
+    fireEvent.scroll(log(), { target: { scrollTop: 0 } });
+    Object.defineProperty(log(), 'clientHeight', { configurable: true, value: 200 });
+    grow(1200);
+    view.rerender(<Workspace session={{ ...s, interim: 'More speech' }} onSettings={vi.fn()}/>);
+    expect(log().scrollTop).toBe(1000);
+  });
+
+  it.each(['touchMove', 'wheel'] as const)('still displays arriving captions after %s on an empty transcript', event => {
+    const s = session({ segments: [] }); const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    fireEvent[event](log());
+    view.rerender(<Workspace session={{ ...s, interim: 'First words' }} onSettings={vi.fn()}/>);
+    expect(transcript().getByText('First words')).toBeTruthy();
+    view.rerender(<Workspace session={{ ...s, segments: [first] }} onSettings={vi.fn()}/>);
+    expect(transcript().getByText(first.chinese)).toBeTruthy();
   });
 });

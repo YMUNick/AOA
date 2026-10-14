@@ -41,6 +41,29 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('interview translation lifecycle', () => {
+  it.each([
+    { mode: 'off' as const, message: '中文未啟用', nextMode: 'local' as const },
+    { mode: 'local' as const, message: '中文翻譯目前無法使用', nextMode: 'cloud' as const },
+  ])('explains unavailable Chinese in $mode mode without paid fallback and clears it in a ready new session', async ({ mode, message, nextMode }) => {
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ translationMode: mode }), false, null));
+    expect(result.current.notice).toContain(message);
+    expect(result.current.notice).toContain('新訪談');
+    expect(result.current.sessionSettings?.translationMode).toBe(mode);
+    await act(async () => { result.current.addManual('Keep my English caption.'); });
+    await act(async () => { result.current.retryTranslation(result.current.segments[0]); });
+    expect(result.current.segments[0].english).toBe('Keep my English caption.');
+    expect(result.current.segments[0].chinese).toBe('');
+    expect(services.translate).not.toHaveBeenCalled();
+    expect(services.answer).not.toHaveBeenCalled();
+    expect(result.current.usage).toMatchObject({ spent: 0, reserved: 0, unconfirmed: 0 });
+
+    const local = { translate: vi.fn().mockResolvedValue('已就緒'), destroy: vi.fn() };
+    act(() => result.current.start(settings({ translationMode: nextMode }), false, nextMode === 'local' ? local : null));
+    expect(result.current.notice).toBe('');
+    expect(services.translate).not.toHaveBeenCalled();
+  });
+
   it('makes no paid or microphone calls in demo even with cloud settings, manual text, and retries', async () => {
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings(), true, null));
@@ -49,6 +72,7 @@ describe('interview translation lifecycle', () => {
     expect(services.translate).not.toHaveBeenCalled();
     expect(services.answer).not.toHaveBeenCalled();
     expect(services.speech).toHaveLength(0);
+    expect(result.current.notice).toContain('示範內容');
     expect(result.current.usage).toEqual({ spent: 0, reserved: 0, inputTokens: 0, outputTokens: 0, unconfirmed: 0 });
     expect(result.current.segments.at(-1)?.translationState).toBe('off');
   });
@@ -60,6 +84,7 @@ describe('interview translation lifecycle', () => {
     act(() => result.current.start(settings(), false, null));
     await act(async () => { result.current.addManual('First question.'); result.current.addManual('Second question.'); });
     act(() => result.current.stop());
+    expect(result.current.notice).toContain('訪談已結束');
     expect(result.current.usage.unconfirmed).toBe(1);
     expect(result.current.usage.reserved).toBeGreaterThan(0);
     await act(async () => { pending.resolve(confirmed); });

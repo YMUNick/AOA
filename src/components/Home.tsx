@@ -31,7 +31,9 @@ export function Home(p: Props) {
             <div className="translation-title"><Globe2 size={19}/><label htmlFor="translation">翻譯方式</label><span className="mini-badge">省費優先</span></div>
             <div className="translation-control"><select id="translation" disabled={p.locked} value={s.translationMode} onChange={e => set('translationMode', e.target.value as Settings['translationMode'])}><option value="local">本機翻譯 · 無翻譯 API 費</option><option value="cloud">雲端翻譯 · 會使用付費 API</option><option value="off">只顯示英文字幕</option></select></div>
             {s.translationMode === 'local' && <div className="local-preparation"><span role="status">{p.preparing ? `正在準備語言模型 ${Math.round(p.progress * 100)}%` : p.localStatus}</span><button type="button" className="text-button" disabled={p.preparing || p.locked} onClick={p.onPrepare}>{p.preparing ? <LoaderCircle className="spin" size={15}/> : <Monitor size={15}/>}準備翻譯</button></div>}
-            {s.translationMode === 'cloud' && <p className="field-hint">只傳送新完成的英文片段。需要先設定 AI；不會自動切換成付費模式。</p>}
+            {s.translationMode === 'local' && <p className="field-hint">本機翻譯準備完成後才會顯示中文。若裝置不支援，可手動選擇付費雲端翻譯並設定 AI 連線。</p>}
+            {s.translationMode === 'cloud' && <p className="field-hint">沿用下方已選 AI 服務的 API 金鑰或代理連線。選擇此模式後，每段新完成的英文會自動送出翻譯並計費。</p>}
+            {s.translationMode === 'off' && <p className="field-hint">中文未啟用，只顯示英文字幕。需要中文時，請在開始新訪談前選擇可用的翻譯方式。</p>}
             {p.preparing && <progress max="1" value={p.progress} aria-label="翻譯模型下載進度"/>}
           </div>
           <div className="section-title ai-title"><span className="step-number">2</span><h3>AI 回答助手</h3></div>
@@ -53,7 +55,7 @@ export function Home(p: Props) {
       </section>
       <aside className="setup-aside">
         <section className="panel ready-panel"><h2>準備好，從容開始</h2><p className="subtle">一個畫面，跟上問題與回答。</p>
-          <ol className="flow-list"><li><span className="flow-icon"><Mic size={20}/></span><div><strong>聽懂當下</strong><p>同步顯示英文與繁體中文</p></div></li><li><span className="flow-icon"><AudioLines size={20}/></span><div><strong>選取問題</strong><p>反白文字，或直接選取整段</p></div></li><li><span className="flow-icon violet"><Sparkles size={20}/></span><div><strong>整理成你的回答</strong><p>英文建議搭配中文思路</p></div></li></ol>
+          <ol className="flow-list"><li><span className="flow-icon"><Mic size={20}/></span><div><strong>聽懂當下</strong><p>英文即時字幕，翻譯就緒後搭配繁體中文</p></div></li><li><span className="flow-icon"><AudioLines size={20}/></span><div><strong>選取問題</strong><p>反白文字，或直接選取整段</p></div></li><li><span className="flow-icon violet"><Sparkles size={20}/></span><div><strong>整理成你的回答</strong><p>英文建議搭配中文思路</p></div></li></ol>
           <div className="budget-settings"><h3><Wallet size={17}/>費用有數，回答有底</h3><fieldset disabled={p.locked || p.starting}>
             <label className="field">本次預算上限（USD）<div className="money-input"><span>US$</span><input type="number" min="0.01" max="20" step="0.1" value={s.budgetUsd} onChange={e => set('budgetUsd', Number(e.target.value))}/></div></label>
             <label className="field answers-count">預計每小時回答次數<select value={s.expectedAnswers} onChange={e => set('expectedAnswers', Number(e.target.value))}>{[10, 20, 40].map(n => <option value={n} key={n}>{n} 次 · 精簡回答</option>)}</select></label>
