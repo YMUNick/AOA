@@ -2,6 +2,8 @@
 .prior-question { min-width: 0; overflow-wrap: anywhere; }
 .mobile-usage-details { display: none; }
 .transcript-content { min-height: 100%; }
+.home-page .translation-fallback-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.home-page .translation-fallback-actions > .button { min-height: 44px; max-width: 100%; white-space: normal; }
 
 /* Highlighting a selection must not move the native text-selection handles. */
 .transcript-row { --row-padding: 24px 10px 22px; }
