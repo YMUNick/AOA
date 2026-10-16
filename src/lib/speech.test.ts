@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechState } from '../types';
-import { SpeechController } from './speech';
+import { SpeechController, type RecognitionInput } from './speech';
 
 type Result = { isFinal: boolean; length: number; 0: { transcript: string; confidence: number } };
 type ResultEvent = { resultIndex: number; results: Result[] };
@@ -13,14 +13,17 @@ class FakeRecognition {
   interimResults = false;
   maxAlternatives = 0;
   onstart: (() => void) | null = null;
+  onaudiostart: (() => void) | null = null;
+  onaudioend: (() => void) | null = null;
   onend: (() => void) | null = null;
   onnomatch: (() => void) | null = null;
   onerror: ((event: { error: string }) => void) | null = null;
   onresult: ((event: ResultEvent) => void) | null = null;
   starts = 0;
+  startInputs: (MediaStreamTrack | undefined)[] = [];
   aborts = 0;
   constructor() { FakeRecognition.instances.push(this); }
-  start() { this.starts += 1; }
+  start(track?: MediaStreamTrack) { this.starts += 1; this.startInputs.push(track); }
   abort() { this.aborts += 1; this.onend?.(); }
   stop() { this.onend?.(); }
 }
@@ -29,16 +32,18 @@ function result(transcript: string, isFinal = false): Result {
   return { isFinal, length: 1, 0: { transcript, confidence: 0.9 } };
 }
 
-function setup() {
+function setup(input?: RecognitionInput) {
   const final: { id: string; text: string }[] = [];
+  const unconfirmed: { id: string; text: string }[] = [];
   const interim: string[] = [];
   const states: SpeechState[] = [];
   const errors: string[] = [];
   const controller = new SpeechController({
     onInterim: text => interim.push(text), onFinal: (id, text) => final.push({ id, text }),
+    onUnconfirmed: (id, text) => unconfirmed.push({ id, text }),
     onState: state => states.push(state), onError: message => errors.push(message),
-  });
-  return { controller, final, interim, states, errors };
+  }, input);
+  return { controller, final, unconfirmed, interim, states, errors };
 }
 
 beforeEach(() => {
@@ -50,6 +55,204 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('SpeechController', () => {
+  it('uses the explicit track on every reconnect and gates audio only for current capture events', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Android' });
+    const track = { kind: 'audio', readyState: 'live' } as MediaStreamTrack;
+    const setRecognitionActive = vi.fn();
+    const { controller } = setup({ track, setRecognitionActive });
+    controller.start();
+    const first = FakeRecognition.instances[0];
+    expect(first.continuous).toBe(true);
+    expect(first.startInputs).toEqual([track]);
+    first.onstart?.();
+    expect(setRecognitionActive).not.toHaveBeenCalledWith(true);
+    first.onaudiostart?.();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(true);
+    const staleAudioStart = first.onaudiostart;
+    first.onaudioend?.();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(false);
+    first.onend?.();
+    vi.advanceTimersByTime(500);
+    const second = FakeRecognition.instances[1];
+    expect(second.startInputs).toEqual([track]);
+    staleAudioStart?.();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(false);
+    second.onaudiostart?.();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(true);
+    controller.stop();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each([
+    { kind: 'audio', readyState: 'ended' },
+    { kind: 'video', readyState: 'live' },
+  ])('rejects invalid track $kind/$readyState without opening a microphone', track => {
+    const { controller, states, errors } = setup({ track: track as MediaStreamTrack, setRecognitionActive: vi.fn() });
+    controller.start();
+    vi.runAllTimers();
+    expect(FakeRecognition.instances).toHaveLength(0);
+    expect(states.at(-1)).toBe('error');
+    expect(errors[0]).toContain('分頁音訊');
+  });
+
+  it('never retries microphone input when native track startup throws', () => {
+    const track = { kind: 'audio', readyState: 'live' } as MediaStreamTrack;
+    const start = vi.spyOn(FakeRecognition.prototype, 'start').mockImplementation(() => { throw new Error('Track input rejected'); });
+    try {
+      const { controller, states, errors } = setup({ track, setRecognitionActive: vi.fn() });
+      controller.start();
+      vi.runAllTimers();
+      expect(start).toHaveBeenCalledExactlyOnceWith(track);
+      expect(states.at(-1)).toBe('error');
+      expect(errors[0]).toContain('分頁音訊');
+    } finally { start.mockRestore(); }
+  });
+
+  it.each(['error', 'end'] as const)('retains unfinished text once after unexpected %s without marking it final', event => {
+    const { controller, final, unconfirmed } = setup();
+    controller.start();
+    const first = FakeRecognition.instances[0];
+    first.onresult?.({ resultIndex: 0, results: [result('unfinished phrase')] });
+    const staleEnd = first.onend;
+    const staleError = first.onerror;
+    if (event === 'end') first.onend?.();
+    else first.onerror?.({ error: 'network' });
+    staleEnd?.(); staleError?.({ error: 'network' });
+    expect(unconfirmed.map(row => row.text)).toEqual(['unfinished phrase']);
+    expect(final).toEqual([]);
+    vi.runAllTimers();
+    FakeRecognition.instances[1].onresult?.({ resultIndex: 0, results: [result('unfinished phrase', true)] });
+    expect(final.map(row => row.text)).toEqual(['unfinished phrase']);
+    expect(final[0].id).not.toBe(unconfirmed[0].id);
+    controller.stop();
+  });
+
+  it.each(['error', 'end', 'nomatch'] as const)('does not invalidate a new generation started by the %s unconfirmed callback', event => {
+    const controller = new SpeechController({
+      onInterim: vi.fn(), onFinal: vi.fn(), onState: vi.fn(), onError: vi.fn(),
+      onUnconfirmed: () => { controller.stop(); controller.start(); },
+    });
+    controller.start();
+    const previous = FakeRecognition.instances[0];
+    previous.onresult?.({ resultIndex: 0, results: [result('unfinished')] });
+    if (event === 'error') previous.onerror?.({ error: 'network' });
+    else if (event === 'end') previous.onend?.();
+    else previous.onnomatch?.();
+    expect(FakeRecognition.instances).toHaveLength(2);
+    expect(FakeRecognition.instances[1].aborts).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    controller.stop();
+  });
+
+  it('accepts final text during graceful finish and resolves only when the recognizer ends', async () => {
+    const setRecognitionActive = vi.fn();
+    const track = { kind: 'audio', readyState: 'live' } as MediaStreamTrack;
+    const { controller, final, unconfirmed, states } = setup({ track, setRecognitionActive });
+    controller.start();
+    const native = FakeRecognition.instances[0];
+    native.stop = vi.fn();
+    native.onaudiostart?.();
+    native.onresult?.({ resultIndex: 0, results: [result('complete this')] });
+    const settled = vi.fn();
+    const completion = controller.finish('paused').then(settled);
+    expect(native.stop).toHaveBeenCalledTimes(1);
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(false);
+    native.onaudiostart?.();
+    expect(setRecognitionActive).toHaveBeenLastCalledWith(false);
+    native.onresult?.({ resultIndex: 0, results: [result('Complete this sentence.', true)] });
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+    expect(final.map(row => row.text)).toEqual(['Complete this sentence.']);
+    native.onend?.();
+    await completion;
+    expect(unconfirmed).toEqual([]);
+    expect(states.at(-1)).toBe('paused');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(FakeRecognition.instances).toHaveLength(1);
+  });
+
+  it.each(['end', 'timeout'] as const)('preserves unresolved interim on graceful finish via %s', async completionEvent => {
+    const { controller, final, unconfirmed, states } = setup();
+    controller.start();
+    const native = FakeRecognition.instances[0];
+    native.stop = vi.fn();
+    native.onresult?.({ resultIndex: 0, results: [result('Words still awaiting confirmation')] });
+    const staleResult = native.onresult;
+    const completion = controller.finish('stopped');
+    if (completionEvent === 'end') native.onend?.();
+    else {
+      vi.advanceTimersByTime(1499);
+      expect(unconfirmed).toEqual([]);
+      vi.advanceTimersByTime(1);
+    }
+    await completion;
+    staleResult?.({ resultIndex: 0, results: [result('late final', true)] });
+    expect(unconfirmed.map(row => row.text)).toEqual(['Words still awaiting confirmation']);
+    expect(final).toEqual([]);
+    expect(states.at(-1)).toBe('stopped');
+    expect(native.aborts).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('shares concurrent finish completion and lets stopped take precedence over paused', async () => {
+    const { controller, states } = setup();
+    controller.start();
+    const native = FakeRecognition.instances[0];
+    native.stop = vi.fn();
+    const first = controller.finish('paused');
+    const second = controller.finish('stopped');
+    const third = controller.finish('paused');
+    expect(second).toBe(first); expect(third).toBe(first);
+    expect(native.stop).toHaveBeenCalledTimes(1);
+    native.onend?.();
+    await first;
+    expect(states.at(-1)).toBe('stopped');
+  });
+
+  it('settles graceful finish after a native error without retrying or dropping the interim tail', async () => {
+    const { controller, unconfirmed, states } = setup();
+    controller.start();
+    const native = FakeRecognition.instances[0];
+    native.stop = vi.fn();
+    native.onresult?.({ resultIndex: 0, results: [result('A remaining tail')] });
+    const completion = controller.finish('stopped');
+    native.onerror?.({ error: 'network' });
+    await completion;
+    vi.runAllTimers();
+    expect(unconfirmed.map(row => row.text)).toEqual(['A remaining tail']);
+    expect(states.at(-1)).toBe('stopped');
+    expect(FakeRecognition.instances).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['pause', 'stop'] as const)('hard %s settles graceful finish immediately and discards unfinished or late text', async action => {
+    const { controller, final, unconfirmed, states } = setup();
+    controller.start();
+    const native = FakeRecognition.instances[0];
+    native.stop = vi.fn();
+    native.onresult?.({ resultIndex: 0, results: [result('discard on cleanup')] });
+    const staleResult = native.onresult;
+    const staleEnd = native.onend;
+    const completion = controller.finish('stopped');
+    controller[action]();
+    await completion;
+    staleResult?.({ resultIndex: 0, results: [result('late result', true)] }); staleEnd?.();
+    vi.runAllTimers();
+    expect(final).toEqual([]); expect(unconfirmed).toEqual([]);
+    expect(states.at(-1)).toBe(action === 'pause' ? 'paused' : 'stopped');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('finishes a pending reconnect without starting another recognizer', async () => {
+    const { controller, states } = setup();
+    controller.start();
+    FakeRecognition.instances[0].onend?.();
+    await controller.finish('stopped');
+    vi.runAllTimers();
+    expect(FakeRecognition.instances).toHaveLength(1);
+    expect(states.at(-1)).toBe('stopped');
+  });
+
   it('starts English continuous recognition once and exposes its permission state', () => {
     const { controller, states } = setup();
     controller.start();

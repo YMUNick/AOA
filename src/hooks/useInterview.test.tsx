@@ -4,22 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiResult, Settings, SpeechState } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/session';
 import { useInterview } from './useInterview';
+import type { TabAudioCapture } from '../lib/tabAudio';
 
 type SpeechCallbacks = {
   onFinal: (id: string, text: string) => void;
   onInterim: (text: string) => void;
   onState: (state: SpeechState) => void;
   onError: (message: string) => void;
+  onUnconfirmed?: (id: string, text: string) => void;
 };
 const services = vi.hoisted(() => ({
   answer: vi.fn(), translate: vi.fn(),
-  speech: [] as { callbacks: SpeechCallbacks; start: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[],
+  speech: [] as { callbacks: SpeechCallbacks; input?: TabAudioCapture; start: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; finish: ReturnType<typeof vi.fn> }[],
 }));
 vi.mock('../lib/ai', () => ({ generateAnswer: services.answer, translateCloud: services.translate }));
 vi.mock('../lib/speech', () => ({ SpeechController: class {
   static isSupported() { return true; }
   start = vi.fn(); pause = vi.fn(); stop = vi.fn();
-  constructor(public callbacks: SpeechCallbacks) { services.speech.push(this); }
+  finish = vi.fn().mockResolvedValue(undefined);
+  constructor(public callbacks: SpeechCallbacks, public input?: TabAudioCapture) { services.speech.push(this); }
 } }));
 
 const settings = (overrides: Partial<Settings> = {}): Settings => ({
@@ -39,6 +42,128 @@ beforeEach(() => {
   services.translate.mockReset().mockResolvedValue(confirmed);
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+function capture() {
+  let callbacks: { onBuffer: (ms: number) => void; onEnded: (message: string) => void };
+  const input = {
+    track: { kind: 'audio', readyState: 'live' } as MediaStreamTrack,
+    setRecognitionActive: vi.fn(),
+    setCallbacks: vi.fn((next: typeof callbacks) => { callbacks = next; }),
+    finish: vi.fn().mockResolvedValue(true), close: vi.fn(),
+  };
+  return { input, buffer: (ms: number) => callbacks.onBuffer(ms), end: (message: string) => callbacks.onEnded(message) };
+}
+
+describe('meeting tab audio lifecycle', () => {
+  it('never falls back to microphone without a selected tab capture, including resume', async () => {
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab' }), false, null));
+    expect(services.speech).toHaveLength(0);
+    expect(result.current.error).toContain('分頁');
+    act(() => result.current.resume());
+    expect(services.speech).toHaveLength(0);
+  });
+
+  it('drains captured audio and accepts its trailing final before ending and closing the capture', async () => {
+    const source = capture(), drained = deferred<boolean>(), speechFinished = deferred<void>();
+    source.input.finish.mockReturnValue(drained.promise);
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab', translationMode: 'off' }), false, null, source.input));
+    const speech = services.speech[0]; speech.finish.mockReturnValue(speechFinished.promise);
+    expect(speech.input).toBe(source.input);
+    act(() => source.buffer(1200)); expect(result.current.bufferMs).toBe(1200);
+    let finished!: Promise<void>;
+    act(() => { finished = result.current.stop(); });
+    expect(source.input.finish).toHaveBeenCalledTimes(1);
+    expect(speech.finish).not.toHaveBeenCalled();
+    expect(result.current.finishing).toBe(true); expect(result.current.ended).toBe(false);
+    await act(async () => { drained.resolve(true); });
+    expect(speech.finish).toHaveBeenCalledWith('stopped');
+    act(() => speech.callbacks.onFinal('tail', 'The complete final sentence.'));
+    expect(result.current.segments[0].english).toBe('The complete final sentence.');
+    await act(async () => { speechFinished.resolve(); await finished; });
+    expect(result.current.ended).toBe(true); expect(result.current.finishing).toBe(false);
+    expect(source.input.close).toHaveBeenCalledTimes(1);
+    act(() => speech.callbacks.onFinal('late', 'Ignore after the end.'));
+    expect(result.current.segments).toHaveLength(1);
+  });
+
+  it('resumes with a newly chosen capture without resetting captions, selected text, or spent budget', async () => {
+    const first = capture(), next = capture();
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab' }), false, null, first.input));
+    await act(async () => { services.speech[0].callbacks.onFinal('first', 'A saved question.'); });
+    act(() => result.current.select('A saved question.', 'first'));
+    const usage = { ...result.current.usage };
+    await act(async () => { await result.current.pause(); });
+    expect(first.input.close).toHaveBeenCalledTimes(1);
+    act(() => result.current.resume(next.input));
+    expect(services.speech).toHaveLength(2); expect(services.speech[1].input).toBe(next.input);
+    expect(result.current.selected).toBe('A saved question.'); expect(result.current.usage).toEqual(usage);
+    act(() => services.speech[0].callbacks.onFinal('stale', 'Stale input.'));
+    await act(async () => { services.speech[1].callbacks.onFinal('second', 'Next question.'); });
+    expect(result.current.segments.map(row => row.english)).toEqual(['A saved question.', 'Next question.']);
+  });
+
+  it('retains uncertain recognition as labelled text, including intentional repeated phrases', async () => {
+    const source = capture(); const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab' }), false, null, source.input));
+    await act(async () => {
+      services.speech[0].callbacks.onUnconfirmed?.('uncertain', 'Yes, yes.');
+      services.speech[0].callbacks.onFinal('confirmed', 'Yes, yes.');
+    });
+    expect(result.current.segments).toHaveLength(2);
+    expect(result.current.segments[0]).toMatchObject({ english: 'Yes, yes.', chinese: '已翻譯', recognitionState: 'unconfirmed' });
+    expect(result.current.segments[1].recognitionState).toBeUndefined();
+  });
+
+  it('drains browser-ended input into a resumable pause and surfaces a bounded-buffer loss warning', async () => {
+    const source = capture(); source.input.finish.mockResolvedValue(false);
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab', translationMode: 'off' }), false, null, source.input));
+    await act(async () => { source.end('分頁分享已停止。'); });
+    expect(result.current.speechState).toBe('paused'); expect(result.current.ended).toBe(false);
+    expect(source.input.close).toHaveBeenCalledTimes(1);
+    expect(result.current.notice).toContain('未處理');
+    expect(result.current.notice).toContain('分頁分享已停止');
+  });
+
+  it('drains an end notification replayed during callback attachment through the new captured-track recognizer', async () => {
+    const source = capture(), drained = deferred<boolean>(); source.input.finish.mockReturnValue(drained.promise);
+    source.input.setCallbacks.mockImplementation(callbacks => { callbacks.onBuffer(850); callbacks.onEnded('分頁已停止分享。'); });
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab', translationMode: 'off' }), false, null, source.input));
+    const speech = services.speech[0];
+    expect(speech.start).toHaveBeenCalledTimes(1); expect(speech.input).toBe(source.input);
+    expect(result.current.bufferMs).toBe(850); expect(result.current.finishing).toBe(true);
+    act(() => speech.callbacks.onFinal('early-tail', 'Queued before sharing stopped.'));
+    await act(async () => { drained.resolve(true); });
+    expect(speech.finish).toHaveBeenCalledWith('paused');
+    expect(result.current.speechState).toBe('paused');
+    expect(result.current.segments[0].english).toBe('Queued before sharing stopped.');
+  });
+
+  it('closes capture on fatal recognition failure and unmount, without retaining a hidden queue', () => {
+    const source = capture(); const { result, unmount } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab' }), false, null, source.input));
+    act(() => services.speech[0].callbacks.onState('error'));
+    expect(source.input.close).toHaveBeenCalledTimes(1);
+    const next = capture(); act(() => result.current.resume(next.input));
+    unmount(); expect(next.input.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an old draining stop terminate a replacement session', async () => {
+    const source = capture(), drained = deferred<boolean>(); source.input.finish.mockReturnValue(drained.promise);
+    const { result } = renderHook(useInterview);
+    act(() => result.current.start(settings({ audioSource: 'tab', translationMode: 'off' }), false, null, source.input));
+    act(() => { void result.current.stop(); });
+    act(() => result.current.start(settings({ translationMode: 'off' }), false, null));
+    await act(async () => { drained.resolve(true); });
+    expect(result.current.ended).toBe(false); expect(result.current.finishing).toBe(false);
+    expect(result.current.sessionSettings?.audioSource).toBe('microphone');
+    expect(services.speech[1].finish).not.toHaveBeenCalled();
+  });
+});
 
 describe('interview translation lifecycle', () => {
   it.each([
@@ -77,13 +202,13 @@ describe('interview translation lifecycle', () => {
     expect(result.current.segments.at(-1)?.translationState).toBe('off');
   });
 
-  it('marks stopped cloud work unconfirmed immediately and never starts queued paid translations', async () => {
+  it('marks cloud work unconfirmed after finalization and never starts its queued successors', async () => {
     const pending = deferred<AiResult>();
     services.translate.mockReturnValueOnce(pending.promise);
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings(), false, null));
     await act(async () => { result.current.addManual('First question.'); result.current.addManual('Second question.'); });
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     expect(result.current.notice).toContain('訪談已結束');
     expect(result.current.usage.unconfirmed).toBe(1);
     expect(result.current.usage.reserved).toBeGreaterThan(0);
@@ -99,17 +224,17 @@ describe('interview translation lifecycle', () => {
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings({ translationMode: 'local' }), false, local));
     await act(async () => { result.current.addManual('First.'); result.current.addManual('Second.'); });
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     await act(async () => { pending.resolve('遲來的翻譯'); });
     expect(local.translate).toHaveBeenCalledTimes(1);
     expect(result.current.segments.every(row => !row.chinese && row.translationState !== 'pending')).toBe(true);
     expect(services.translate).not.toHaveBeenCalled();
   });
 
-  it('does not start a paid translation when stop happens before the queue begins', async () => {
+  it('does not start paid translation for text added after the session has finalized', async () => {
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings(), false, null));
-    await act(async () => { result.current.addManual('Queued question.'); result.current.stop(); });
+    await act(async () => { await result.current.stop(); result.current.addManual('Queued question.'); });
     expect(services.translate).not.toHaveBeenCalled();
     expect(result.current.usage.reserved).toBe(0);
     expect(result.current.segments[0].translationState).not.toBe('pending');
@@ -171,7 +296,7 @@ describe('interview translation lifecycle', () => {
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings(), false, null));
     await act(async () => { result.current.addManual('Hello.'); });
-    act(() => result.current.pause());
+    await act(async () => { await result.current.pause(); });
     await act(async () => { pending.resolve(confirmed); });
     expect(result.current.ended).toBe(false);
     expect(result.current.speechState).toBe('paused');
@@ -224,7 +349,7 @@ describe('interview answer lifecycle', () => {
     services.answer.mockReturnValueOnce(pending.promise);
     const { result } = renderHook(useInterview);
     act(() => result.current.start(settings({ translationMode: 'off' }), false, null));
-    act(() => { result.current.select('Original question.'); result.current.stop(); });
+    await act(async () => { result.current.select('Original question.'); await result.current.stop(); });
     await act(async () => { void result.current.ask(); });
     act(() => result.current.select('New selection.'));
     await act(async () => { pending.resolve({ text: 'Original answer.', usage: { inputTokens: 100, outputTokens: 50 } }); });
@@ -273,7 +398,7 @@ describe('interview answer lifecycle', () => {
     act(() => result.current.start(settings({ translationMode: 'off' }), false, null));
     act(() => result.current.select('First question.'));
     await act(async () => { void result.current.ask(); });
-    act(() => { result.current.stop(); result.current.select('Second question.'); });
+    await act(async () => { await result.current.stop(); result.current.select('Second question.'); });
     await act(async () => { void result.current.ask(); });
     expect(services.answer).toHaveBeenCalledTimes(2);
     await act(async () => { first.resolve(confirmed); });

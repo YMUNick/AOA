@@ -9,6 +9,7 @@ interface Props {
   onPrepare: () => void; localStatus: string; progress: number; preparing: boolean; starting: boolean;
   onConnect: () => void; connecting: boolean; connectionMessage: string; locked: boolean; onReturn: () => void;
   startError: string; localPreparationFailed: boolean; localUnavailable: boolean;
+  tabAudioAvailability: { supported: boolean; reason: string };
 }
 export function Home(p: Props) {
   const { settings: s } = p;
@@ -17,25 +18,25 @@ export function Home(p: Props) {
   const estimate = estimateHourlyCost(s.provider, s.expectedAnswers, s.translationMode === 'cloud');
   return <div className="home-page">
     <header className="page-heading"><div className="eyebrow">YOUR INTERVIEW, IN FOCUS</div><h1>把注意力留給對話<span className="cyan">。</span></h1><p>即時理解英文問題，再用你的經驗回答。</p></header>
-    {p.locked && <div className="notice"><ShieldCheck size={18}/><span>本次模型、翻譯與預算已固定；更新金鑰不會更改翻譯方式。若要更改翻譯方式，請先結束本次訪談，再開始新訪談。目前逐字稿仍保留，可更新金鑰或重新連線。</span><button className="text-button" onClick={p.onReturn}>返回工作區 <ArrowRight size={16}/></button></div>}
+    {p.locked && <div className="notice"><ShieldCheck size={18}/><span>本次收音來源、模型、翻譯與預算已固定；更新金鑰不會更改翻譯方式。若要更改翻譯方式或收音來源，請先結束本次訪談，再開始新訪談。目前逐字稿仍保留，可更新金鑰或重新連線。</span><button className="text-button" onClick={p.onReturn}>返回工作區 <ArrowRight size={16}/></button></div>}
     <div className="setup-grid">
       <section className="panel setup-panel" aria-labelledby="setup-title">
         <div className="panel-intro"><h2 id="setup-title">開始前，先設定好</h2><p>你的收音方式、翻譯偏好與 AI 回答助手。</p></div>
         <fieldset disabled={p.starting}>
           <div className="section-title"><span className="step-number">1</span><h3>收音與語言</h3></div>
           <div className="field-grid">
-            <div className="field"><span className="field-label">麥克風來源</span><div className="static-field"><Mic size={18}/><span>系統預設麥克風</span></div></div>
+            <label className="field">收音來源<select disabled={p.locked} value={s.audioSource} onChange={e => set('audioSource', e.target.value as Settings['audioSource'])}><option value="microphone">麥克風 · 現場對話</option><option value="tab">會議分頁音訊 · 電腦 Chrome</option></select></label>
             <div className="field"><span className="field-label">辨識語言 → 翻譯語言</span><div className="static-field language-pair"><span>English</span><ArrowRight size={19}/><span>繁體中文</span></div></div>
           </div>
-          <p className="field-hint">按下開始後才會要求麥克風權限；語音辨識可能經由瀏覽器雲端服務處理。</p>
+          {s.audioSource === 'tab' ? <><p className="field-hint">Chrome 分頁 → 選取 Google Meet → 勾選「分享分頁音訊」→ 分享</p><p className="field-hint">可戴耳機使用。瀏覽器會一併要求分頁畫面權限；AOA 不讀取或錄製畫面。音訊最多在此分頁記憶體暫存 30 秒，辨識可能經由瀏覽器雲端服務處理。</p>{!p.tabAudioAvailability.supported && <p className="field-hint" role="status">{p.tabAudioAvailability.reason}</p>}</> : <p className="field-hint">按下開始後才會要求麥克風權限；語音辨識可能經由瀏覽器雲端服務處理。</p>}
           <div className="translation-box">
             <div className="translation-title"><Globe2 size={19}/><label htmlFor="translation">翻譯方式</label><span className="mini-badge">省費優先</span></div>
             <div className="translation-control"><select id="translation" disabled={p.locked} value={s.translationMode} onChange={e => set('translationMode', e.target.value as Settings['translationMode'])}><option value="local">本機翻譯 · 無翻譯 API 費</option><option value="cloud">雲端翻譯 · 會使用付費 API</option><option value="off">只顯示英文字幕</option></select></div>
-            <p className="field-hint">會記住翻譯方式、AI 服務與連線方式；API 金鑰只保留於此分頁，重新整理後需重填。</p>
+            <p className="field-hint">會記住收音來源、翻譯方式、AI 服務與連線方式；API 金鑰只保留於此分頁，重新整理後需重填。</p>
             {s.translationMode === 'local' && <div className="local-preparation"><span role="status">{p.preparing ? `正在準備語言模型 ${Math.round(p.progress * 100)}%` : p.localStatus}</span><button type="button" className="text-button" disabled={p.preparing || p.locked} onClick={p.onPrepare}>{p.preparing ? <LoaderCircle className="spin" size={15}/> : <Monitor size={15}/>}準備翻譯</button></div>}
             {s.translationMode === 'local' && <p className="field-hint">本機翻譯準備完成後才會顯示中文。若裝置不支援，可手動選擇付費雲端翻譯並設定 AI 連線。</p>}
             {s.translationMode === 'local' && (p.localUnavailable || p.localPreparationFailed) && !p.locked && <div className="translation-fallback-actions"><button type="button" className="button secondary" onClick={() => set('translationMode', 'cloud')}>改用雲端翻譯（計費）</button><button type="button" className="button secondary" onClick={() => set('translationMode', 'off')}>只用英文字幕</button></div>}
-            {s.translationMode === 'cloud' && <p className="field-hint">沿用下方已選 AI 服務的 API 金鑰或代理連線。選擇此模式後，每段新完成的英文會自動送出翻譯並計費。</p>}
+            {s.translationMode === 'cloud' && <p className="field-hint">沿用下方已選 AI 服務的 API 金鑰或代理連線。每段加入逐字稿的英文（含未確認的句尾）會自動送出翻譯並計費。</p>}
             {s.translationMode === 'off' && <p className="field-hint">中文未啟用，只顯示英文字幕。需要中文時，請在開始新訪談前選擇可用的翻譯方式。</p>}
             {p.preparing && <progress max="1" value={p.progress} aria-label="翻譯模型下載進度"/>}
           </div>
@@ -65,9 +66,9 @@ export function Home(p: Props) {
           </fieldset><div className="hour-estimate"><span>一小時模型費估算</span><strong>{formatMoney(estimate.low)}{estimate.high !== estimate.low && ` – ${formatMoney(estimate.high)}`}</strong></div><p className="field-hint">含 20% 餘裕；不含另購語音與代理服務。依實際 token 計費，非帳單保證。</p><p className="field-hint">接近預算時提醒，達上限停止新付費請求。</p></div>
         </section>
         {p.startError && <div className="notice error" role="alert">{p.startError}</div>}
-        <button className="button primary start-button" disabled={p.starting || (!p.locked && (!Number.isFinite(s.budgetUsd) || s.budgetUsd < 0.01 || s.budgetUsd > 20))} onClick={() => p.locked ? p.onReturn() : p.onStart(false)}>{p.starting ? <LoaderCircle size={20} className="spin"/> : <Mic size={20}/>}<span>{p.starting ? '正在準備…' : p.locked ? '返回本次訪談' : '開始聆聽'}</span><ArrowRight size={21}/></button>
+        <button className="button primary start-button" disabled={p.starting || (!p.locked && (!Number.isFinite(s.budgetUsd) || s.budgetUsd < 0.01 || s.budgetUsd > 20 || (s.audioSource === 'tab' && !p.tabAudioAvailability.supported)))} onClick={() => p.locked ? p.onReturn() : p.onStart(false)}>{p.starting ? <LoaderCircle size={20} className="spin"/> : s.audioSource === 'tab' ? <Monitor size={20}/> : <Mic size={20}/>}<span>{p.starting ? '正在準備…' : p.locked ? '返回本次訪談' : s.audioSource === 'tab' ? '選擇會議分頁並開始' : '開始聆聽'}</span><ArrowRight size={21}/></button>
         {!p.locked && <button className="button demo-button" disabled={p.starting} onClick={() => p.onStart(true)}><Play size={16}/>先試用示範 · 不收音、不計費</button>}
-        <p className="start-note">桌面 Chrome 體驗最佳 · 不儲存錄音</p>
+        <p className="start-note">{s.audioSource === 'tab' ? '電腦 Chrome · 音訊僅於分頁暫存' : '桌面 Chrome 體驗最佳 · 不儲存錄音'}</p>
       </aside>
     </div>
   </div>;

@@ -266,3 +266,6 @@
   .session-controls .mobile-usage-details { grid-column: 1; grid-row: 1; }
   .session-controls .usage-popover { left: 0; right: auto; }
 }
+.workspace-page .tab-source-controls { flex-wrap: wrap; gap: 12px; }
+.workspace-page .tab-source-controls > span { flex: 1 1 260px; min-width: 0; }
+.workspace-page .tab-source-controls > .button { min-height: 44px; }

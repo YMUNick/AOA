@@ -1,7 +1,7 @@
 import type { Settings } from '../types';
 
 const STORAGE_KEY = 'aoa.preferences.v1';
-type Preferences = Pick<Settings, 'translationMode' | 'provider' | 'connectionMode'>;
+type Preferences = Pick<Settings, 'translationMode' | 'provider' | 'connectionMode' | 'audioSource'>;
 
 export function readPreferences(): Preferences | null {
   try {
@@ -13,11 +13,13 @@ export function readPreferences(): Preferences | null {
     if (data.version !== 1
       || (data.translationMode !== 'local' && data.translationMode !== 'cloud' && data.translationMode !== 'off')
       || (data.provider !== 'openai' && data.provider !== 'gemini')
-      || (data.connectionMode !== 'personal' && data.connectionMode !== 'gateway')) return null;
+      || (data.connectionMode !== 'personal' && data.connectionMode !== 'gateway')
+      || ('audioSource' in data && data.audioSource !== 'microphone' && data.audioSource !== 'tab')) return null;
     return {
       translationMode: data.translationMode,
       provider: data.connectionMode === 'gateway' ? 'openai' : data.provider,
       connectionMode: data.connectionMode,
+      audioSource: data.audioSource === 'tab' ? 'tab' : 'microphone',
     };
   } catch {
     return null;
@@ -31,6 +33,7 @@ export function savePreferences(preferences: Preferences): void {
       translationMode: preferences.translationMode,
       provider: preferences.connectionMode === 'gateway' ? 'openai' : preferences.provider,
       connectionMode: preferences.connectionMode,
+      audioSource: preferences.audioSource,
     }));
   } catch {
     // Storage may be unavailable or full; the current tab still keeps its choices.

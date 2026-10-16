@@ -5,6 +5,7 @@ import { createLocalTranslator } from '../lib/translator';
 import { BudgetLedger } from '../lib/budget';
 import { generateAnswer, translateCloud } from '../lib/ai';
 import { DEMO_ANSWER, DEMO_SEGMENTS } from '../lib/session';
+import type { TabAudioCapture } from '../lib/tabAudio';
 
 type LocalTranslator = Awaited<ReturnType<typeof createLocalTranslator>>;
 
@@ -52,6 +53,8 @@ export function useInterview() {
   const [isDemo, setIsDemo] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [bufferMs, setBufferMs] = useState(0);
   const [selected, setSelected] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [answer, setAnswer] = useState('');
@@ -62,6 +65,10 @@ export function useInterview() {
   const [sessionSettings, setSessionSettings] = useState<Settings | null>(null);
   const settingsRef = useRef<Settings | null>(null);
   const speech = useRef<SpeechController | null>(null);
+  const capture = useRef<TabAudioCapture | null>(null);
+  const speechEpoch = useRef(0);
+  const finishingTask = useRef<Promise<void> | null>(null);
+  const finishRef = useRef<(state: 'paused' | 'stopped', message?: string) => Promise<void>>(() => Promise.resolve());
   const local = useRef<LocalTranslator | null>(null);
   const ledger = useRef<BudgetLedger | null>(null);
   const generation = useRef(0);
@@ -119,7 +126,7 @@ export function useInterview() {
     const timer = window.setInterval(updateElapsed, 1000);
     return () => clearInterval(timer);
   }, [clockRunning, updateElapsed]);
-  useEffect(() => () => { generation.current++; translationEpoch.current++; speech.current?.stop(); cancelRequests(); }, [cancelRequests]);
+  useEffect(() => () => { generation.current++; speechEpoch.current++; translationEpoch.current++; speech.current?.stop(); capture.current?.close(); capture.current = null; cancelRequests(); }, [cancelRequests]);
 
   const translate = useCallback((id: string, text: string, gen: number) => {
     if (demoRef.current || endedRef.current || gen !== generation.current) return;
@@ -159,7 +166,7 @@ export function useInterview() {
     }).catch(() => { /* Each row owns its error; keep the queue usable. */ }).finally(() => { pending.delete(id); });
   }, [updateUsage]);
 
-  const addSegment = useCallback((id: string, text: string) => {
+  const addSegment = useCallback((id: string, text: string, recognitionState?: 'unconfirmed') => {
     const clean = text.trim();
     if (!clean || seen.current.has(id)) return;
     seen.current.add(id);
@@ -169,14 +176,62 @@ export function useInterview() {
     const added: TranscriptSegment[] = chunks.map((english, index) => ({
       id: chunks.length === 1 ? id : `${id}:part-${index}`, english, chinese: '', time,
       translationState: mode === 'off' ? 'off' : 'pending',
+      ...(recognitionState ? { recognitionState } : {}),
     }));
     setSegments(rows => [...rows, ...added]);
     if (mode !== 'off') for (const row of added) translate(row.id, row.english, generation.current);
   }, [translate, updateElapsed]);
 
-  const start = useCallback((settings: Settings, demo: boolean, translator: LocalTranslator | null) => {
+  const startSpeech = useCallback((input?: TabAudioCapture) => {
+    const gen = generation.current, epoch = ++speechEpoch.current;
+    speech.current?.stop();
+    if (capture.current !== input) capture.current?.close();
+    capture.current = input ?? null;
+    const current = () => gen === generation.current && epoch === speechEpoch.current && !endedRef.current;
+    if (!SpeechController.isSupported()) {
+      input?.close(); capture.current = null;
+      setSpeechState('error'); setError('此瀏覽器不支援語音辨識。請改用桌面 Chrome，或按「貼上英文」繼續。'); pauseClock(); return;
+    }
+    speech.current = new SpeechController({
+      onInterim: t => { if (current()) setInterim(t); },
+      onFinal: (id, text) => { if (current()) addSegment(id, text); },
+      onUnconfirmed: (id, text) => { if (current()) addSegment(id, text, 'unconfirmed'); },
+      onState: state => {
+        if (!current()) return;
+        setSpeechState(state);
+        if (state === 'error') {
+          pauseClock();
+          if (capture.current) {
+            capture.current.close(); capture.current = null; setBufferMs(0);
+            setNotice('會議音訊辨識已停止，未處理的音訊可能不完整。逐字稿與用量已保留，請重新選擇分頁。');
+          }
+        }
+      },
+      onError: msg => { if (current()) setError(msg); },
+    }, input);
+    let started = false, earlyEnd: string | undefined;
+    input?.setCallbacks({
+      onBuffer: ms => { if (current() && capture.current === input) setBufferMs(ms); },
+      onEnded: message => {
+        if (!current() || capture.current !== input) return;
+        if (!started) earlyEnd = message;
+        else void finishRef.current('paused', message);
+      },
+    });
+    speech.current.start();
+    started = true;
+    // A share may end between picker resolution and attachment. Start this track only
+    // to drain its retained audio, then pause; never finalize the previous recognizer.
+    if (earlyEnd !== undefined && current() && capture.current === input) void finishRef.current('paused', earlyEnd);
+  }, [addSegment, pauseClock]);
+
+  const start = useCallback((settings: Settings, demo: boolean, translator: LocalTranslator | null, input?: TabAudioCapture) => {
+    if (!demo && settings.audioSource === 'tab' && !input) {
+      setSpeechState('error'); setError('請先選擇要分享音訊的會議分頁。'); return;
+    }
     const nextLedger = new BudgetLedger(settings.budgetUsd, settings.provider);
-    generation.current++; translationEpoch.current++; speech.current?.stop(); speech.current = null; cancelRequests();
+    generation.current++; speechEpoch.current++; translationEpoch.current++; speech.current?.stop(); speech.current = null; capture.current?.close(); capture.current = null; cancelRequests();
+    finishingTask.current = null; setFinishing(false); setBufferMs(0);
     answerAbort.current = null; queue.current = Promise.resolve(); seen.current = new Set(); pendingTranslations.current = new Set();
     settingsRef.current = { ...settings }; setSessionSettings({ ...settings }); local.current = translator;
     ledger.current = nextLedger; updateUsage();
@@ -185,6 +240,7 @@ export function useInterview() {
     setSelected(''); setSelectedId(''); setAnswer(''); setAnswerQuestion(''); setAnswerError(''); setAnswerBusy(false);
     setHasSession(true); setEnded(false); endedRef.current = false; demoRef.current = demo; setIsDemo(demo);
     if (demo) {
+      input?.close();
       segmentsRef.current = DEMO_SEGMENTS.map((s, i) => ({ ...s, id: `demo-${i}`, time: i * 12, translationState: 'done' }));
       setSegments(segmentsRef.current);
       setSpeechState('paused'); setSelected(DEMO_SEGMENTS[1].english); setSelectedId('demo-1');
@@ -196,33 +252,54 @@ export function useInterview() {
       setNotice('中文翻譯目前無法使用：本機翻譯尚未就緒或此裝置不支援。請準備好本機翻譯，或設定 API 金鑰／代理並手動選擇付費雲端翻譯後，開始新訪談。');
     }
     segmentsRef.current = []; setSegments([]);
-    if (!SpeechController.isSupported()) { setSpeechState('error'); setError('此瀏覽器不支援語音辨識。請改用桌面 Chrome，或按「貼上英文」繼續。'); return; }
-    const gen = generation.current;
-    speech.current = new SpeechController({
-      onInterim: t => { if (gen === generation.current && !endedRef.current) setInterim(t); },
-      onFinal: (id, text) => { if (gen === generation.current && !endedRef.current) addSegment(id, text); },
-      onState: s => { if (gen === generation.current && !endedRef.current) setSpeechState(s); },
-      onError: msg => { if (gen === generation.current && !endedRef.current) setError(msg); },
-    });
-    speech.current.start();
-  }, [addSegment, cancelRequests, updateUsage]);
+    if (settings.audioSource !== 'tab') input?.close();
+    startSpeech(settings.audioSource === 'tab' ? input : undefined);
+  }, [cancelRequests, startSpeech, updateUsage]);
 
-  function pause() { if (endedRef.current) return; pauseClock(); speech.current?.pause(); setSpeechState('paused'); setInterim(''); }
-  function resume() {
-    if (endedRef.current) return;
+  function finishSession(state: 'paused' | 'stopped', message = ''): Promise<void> {
+    if (endedRef.current) return Promise.resolve();
+    if (finishingTask.current) return finishingTask.current;
+    pauseClock(); setFinishing(true);
+    const gen = generation.current, input = capture.current, controller = speech.current;
+    const task = (async () => {
+      let warning = message;
+      try {
+        if (input && !await input.finish()) warning += ' 部分暫存音訊未處理完成，字幕可能不完整。';
+      } catch { warning += ' 暫存音訊未處理完成，字幕可能不完整。'; }
+      if (gen !== generation.current) return;
+      try { await controller?.finish(state); }
+      catch { warning += ' 最後一段辨識未完成，請檢查逐字稿。'; controller?.stop(); }
+      if (gen !== generation.current) return;
+      if (capture.current === input) { input?.close(); capture.current = null; }
+      setBufferMs(0); setInterim(''); setSpeechState(state);
+      if (state === 'stopped') {
+        endedRef.current = true; translationEpoch.current++; setEnded(true);
+        cancelAnswer(); cancelRequests(); updateUsage();
+        pendingTranslations.current = new Set(); queue.current = Promise.resolve();
+        setSegments(rows => rows.map(row => row.translationState === 'pending' ? { ...row, translationState: 'off', error: undefined } : row));
+        setNotice(`訪談已結束，逐字稿仍保留在這個分頁。你可以匯出或繼續整理回答。${warning}`);
+      } else if (warning) setNotice(`${warning} 逐字稿與用量已保留；可重新選擇分頁繼續。`);
+    })().finally(() => {
+      if (gen === generation.current && finishingTask.current === task) { finishingTask.current = null; setFinishing(false); }
+    });
+    finishingTask.current = task;
+    return task;
+  }
+  finishRef.current = finishSession;
+  function pause() { return finishSession('paused'); }
+  function resume(input?: TabAudioCapture) {
+    if (endedRef.current || finishingTask.current) { input?.close(); return; }
     setError('');
-    if (demoRef.current) { setSpeechState('paused'); return; }
+    if (demoRef.current) { input?.close(); setSpeechState('paused'); return; }
+    if (!settingsRef.current) { input?.close(); setError('請先選擇要分享音訊的會議分頁。'); return; }
+    if (settingsRef.current.audioSource === 'tab' && !input) {
+      setSpeechState('paused'); setError('請重新選擇會議分頁，再繼續收音。'); return;
+    }
     if (clock.current.startedAt === null) clock.current.startedAt = performance.now();
-    speech.current?.start();
+    if (settingsRef.current.audioSource === 'tab') { setNotice('已重新連接會議分頁；逐字稿與用量繼續累積。'); startSpeech(input); }
+    else { input?.close(); speech.current?.start(); }
   }
-  function stop() {
-    pauseClock();
-    endedRef.current = true; translationEpoch.current++; setEnded(true); speech.current?.stop(); setSpeechState('stopped'); setInterim('');
-    cancelAnswer(); cancelRequests(); updateUsage();
-    pendingTranslations.current = new Set(); queue.current = Promise.resolve();
-    setSegments(rows => rows.map(row => row.translationState === 'pending' ? { ...row, translationState: 'off', error: undefined } : row));
-    setNotice('訪談已結束，逐字稿仍保留在這個分頁。你可以匯出或繼續整理回答。');
-  }
+  function stop() { return finishSession('stopped'); }
   function select(text: string, id = '') { setSelected(text.trim().slice(0, 1000)); setSelectedId(id); setAnswerError(''); }
   async function ask(style: AnswerStyle = settingsRef.current?.answerStyle || 'concise') {
     if (answerAbort.current || !selected.trim()) return;
@@ -266,7 +343,7 @@ export function useInterview() {
     if (!current || current.translationState !== 'error') return;
     translate(current.id, current.english, generation.current);
   }
-  return { segments, interim, speechState, error, notice, elapsed, isDemo, hasSession, ended, selected, selectedId,
+  return { segments, interim, speechState, error, notice, elapsed, isDemo, hasSession, ended, finishing, bufferMs, selected, selectedId,
     answer, answerQuestion, answerBusy, answerError, usage, sessionSettings, start, pause, resume, stop, select, ask, cancelAnswer, updateConnection,
     addManual: (text: string) => addSegment(`manual-${crypto.randomUUID()}`, text), retryTranslation };
 }

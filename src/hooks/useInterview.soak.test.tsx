@@ -23,6 +23,7 @@ class SimulatedRecognition {
   constructor() { SimulatedRecognition.instances.push(this); }
   start() { this.onstart?.(); }
   abort() { this.onend?.(); }
+  stop() { this.onend?.(); }
   sentence(text: string) {
     const index = this.results.length;
     this.results.push({ isFinal: false, length: 1, 0: { transcript: text.slice(0, 8), confidence: 0.5 } });
@@ -61,7 +62,7 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     act(() => result.current.start({ ...DEFAULT_SETTINGS, apiKey: 'unused-test-only-key', translationMode: 'local' }, false, local));
     const expected: string[] = [];
     for (let minute = 0; minute < 60; minute++) {
-      if (minute === 20) act(() => result.current.pause());
+      if (minute === 20) await act(async () => { await result.current.pause(); });
       if (minute === 22) act(() => result.current.resume());
       if (minute === 20 || minute === 21) {
         await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
@@ -93,7 +94,7 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     expect(result.current.usage).toEqual({ spent: 0, reserved: 0, inputTokens: 0, outputTokens: 0, unconfirmed: 0 });
     expect(cloud.translate).not.toHaveBeenCalled();
     expect(cloud.answer).not.toHaveBeenCalled();
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(result.current.elapsed).toBe(3480);
     expect(vi.getTimerCount()).toBe(0);
@@ -118,26 +119,26 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     expect(result.current.speechState).toBe('listening');
     expect(cloud.translate).not.toHaveBeenCalled();
     expect(cloud.answer).not.toHaveBeenCalled();
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
   }, 20_000);
 
   it('retains partial seconds across repeated pauses and a recovered connection', async () => {
     const { result } = renderHook(useInterview);
     act(() => result.current.start({ ...DEFAULT_SETTINGS, translationMode: 'off' }, false, null));
     await act(async () => { await vi.advanceTimersByTimeAsync(1250); });
-    act(() => result.current.pause());
+    await act(async () => { await result.current.pause(); });
     await act(async () => { await vi.advanceTimersByTimeAsync(5750); });
     expect(result.current.elapsed).toBe(1);
     act(() => result.current.resume());
     await act(async () => { await vi.advanceTimersByTimeAsync(750); });
-    act(() => result.current.pause());
+    await act(async () => { await result.current.pause(); });
     expect(result.current.elapsed).toBe(2);
     await act(async () => { await vi.advanceTimersByTimeAsync(250); });
     act(() => { result.current.resume(); active().onerror?.({ error: 'network' }); });
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
     act(() => active().sentence('Recovered after a pause.'));
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     expect(Date.now()).toBe(9000);
     expect(result.current.elapsed).toBe(3); // 1.25 + 0.75 + 1 seconds active, 6 seconds paused.
   });
@@ -153,7 +154,7 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     expect(result.current.elapsed).toBe(3600);
     act(() => active().sentence('Caption after the delayed callback.'));
     expect(result.current.segments[0].time).toBe(3600);
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(result.current.elapsed).toBe(3600);
   });
@@ -180,7 +181,7 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     const oldNative = active();
     const staleResult = oldNative.onresult;
     const staleEnd = oldNative.onend;
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
     expect(result.current.usage.unconfirmed).toBe(1);
     const freshLocal = { translate: vi.fn(async () => '新的翻譯'), destroy: vi.fn() };
     act(() => result.current.start({ ...DEFAULT_SETTINGS, translationMode: 'local' }, false, freshLocal));
@@ -203,6 +204,6 @@ describe('accelerated one-hour interview simulation (no real microphone or paid 
     expect(cloud.answer).toHaveBeenCalledTimes(1); // Explicit user action; service itself is mocked.
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(result.current.elapsed).toBe(1);
-    act(() => result.current.stop());
+    await act(async () => { await result.current.stop(); });
   }, 20_000);
 });

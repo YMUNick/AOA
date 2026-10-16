@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connectGateway, generateAnswer, translateCloud } from './ai';
 import type { Settings } from '../types';
 
-const settings: Settings = { connectionMode: 'personal', provider: 'openai', apiKey: 'test-only-key', gatewayUrl: 'https://gateway.example', accessCode: 'private-code', sessionToken: 'session-token', translationMode: 'cloud', profile: '', budgetUsd: 1, expectedAnswers: 20, answerStyle: 'concise' };
+const settings: Settings = { audioSource: 'microphone', connectionMode: 'personal', provider: 'openai', apiKey: 'test-only-key', gatewayUrl: 'https://gateway.example', accessCode: 'private-code', sessionToken: 'session-token', translationMode: 'cloud', profile: '', budgetUsd: 1, expectedAnswers: 20, answerStyle: 'concise' };
 const question = { question: 'Tell me about yourself.', context: '', profile: '', style: 'concise' as const };
 const openai = { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'English answer\n中文重點' }] }], usage: { input_tokens: 40, output_tokens: 120, output_tokens_details: { reasoning_tokens: 20 } } };
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });

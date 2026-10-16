@@ -5,6 +5,10 @@ import type { useInterview } from '../hooks/useInterview';
 import { DEFAULT_SETTINGS } from '../lib/session';
 import type { TranscriptSegment } from '../types';
 import { Workspace } from './Workspace';
+import type { TabAudioCapture } from '../lib/tabAudio';
+
+const tabAudio = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('../lib/tabAudio', () => ({ requestTabAudio: tabAudio.request }));
 
 type Interview = ReturnType<typeof useInterview>;
 const first: TranscriptSegment = { id: 'first', english: 'What interests you about this role?', chinese: '這個職位有什麼吸引你？', time: 1, translationState: 'done' };
@@ -13,9 +17,9 @@ const next: TranscriptSegment = { id: 'next', english: 'What happened next?', ch
 function session(overrides: Partial<Interview> = {}): Interview {
   return {
     segments: [first, latest], interim: '', speechState: 'listening', error: '', notice: '', elapsed: 7,
-    isDemo: false, hasSession: true, ended: false, selected: '', selectedId: '', answer: '', answerQuestion: '',
+    isDemo: false, hasSession: true, ended: false, finishing: false, bufferMs: 0, selected: '', selectedId: '', answer: '', answerQuestion: '',
     answerBusy: false, answerError: '', usage: { spent: 0, reserved: 0, inputTokens: 0, outputTokens: 0, unconfirmed: 0 },
-    sessionSettings: DEFAULT_SETTINGS, start: vi.fn(), pause: vi.fn(), resume: vi.fn(), stop: vi.fn(), select: vi.fn(),
+    sessionSettings: DEFAULT_SETTINGS, start: vi.fn(), pause: vi.fn().mockResolvedValue(undefined), resume: vi.fn(), stop: vi.fn().mockResolvedValue(undefined), select: vi.fn(),
     ask: vi.fn().mockResolvedValue(undefined), cancelAnswer: vi.fn(), updateConnection: vi.fn(), addManual: vi.fn(), retryTranslation: vi.fn(),
     ...overrides,
   };
@@ -29,6 +33,7 @@ function viewport(mobile: boolean) {
 function transcript() { return within(screen.getByRole('log', { name: '英中逐字稿' })); }
 let resizeContent: () => void;
 beforeEach(() => {
+  tabAudio.request.mockReset();
   viewport(true);
   resizeContent = () => {};
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
@@ -50,6 +55,61 @@ function selectText(text: Node) {
     window.getSelection()!.addRange(range); document.dispatchEvent(new Event('selectionchange'));
   });
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+function capture() {
+  return { track: {} as MediaStreamTrack, setRecognitionActive: vi.fn(), setCallbacks: vi.fn(), finish: vi.fn().mockResolvedValue(true), close: vi.fn() };
+}
+const tabSettings = { ...DEFAULT_SETTINGS, audioSource: 'tab' as const };
+
+describe('meeting tab controls', () => {
+  it('keeps uncertain recognition visibly labelled alongside both languages even when selected', () => {
+    render(<Workspace session={session({ segments: [{ ...first, recognitionState: 'unconfirmed' }], selectedId: first.id })} onSettings={vi.fn()}/>);
+    expect(transcript().getByText(/辨識未確認/)).toBeTruthy();
+    expect(transcript().getByText(first.english)).toBeTruthy(); expect(transcript().getByText(first.chinese)).toBeTruthy();
+  });
+  it('shows draining feedback and blocks conflicting session actions while retaining the transcript', () => {
+    render(<Workspace session={session({ sessionSettings: tabSettings, finishing: true, bufferMs: 2500 })} onSettings={vi.fn()}/>);
+    expect(screen.getByText('正在收尾')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '本次設定' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '結束訪談' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '重新選擇分頁' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(transcript().getByText(first.chinese)).toBeTruthy();
+  });
+  it('opens the picker directly from the click, then waits for the prior capture to finish before resuming', async () => {
+    const paused = deferred<void>(), picked = deferred<TabAudioCapture>(), input = capture();
+    tabAudio.request.mockReturnValue(picked.promise);
+    const s = session({ sessionSettings: tabSettings, pause: vi.fn().mockReturnValue(paused.promise) });
+    render(<Workspace session={s} onSettings={vi.fn()}/>);
+    fireEvent.click(screen.getByRole('button', { name: '重新選擇分頁' }));
+    expect(tabAudio.request).toHaveBeenCalledTimes(1); expect(s.pause).toHaveBeenCalledTimes(1);
+    await act(async () => { picked.resolve(input); }); expect(s.resume).not.toHaveBeenCalled();
+    await act(async () => { paused.resolve(); });
+    expect(s.resume).toHaveBeenCalledWith(input); expect(s.start).not.toHaveBeenCalled();
+    expect(transcript().getByText(first.chinese)).toBeTruthy();
+  });
+  it('keeps the session paused after a cancelled picker without a microphone fallback or clearing rows', async () => {
+    tabAudio.request.mockRejectedValue(new Error('已取消選擇會議分頁。'));
+    const s = session({ sessionSettings: tabSettings, speechState: 'paused' });
+    render(<Workspace session={s} onSettings={vi.fn()}/>);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新選擇分頁' })); });
+    expect(screen.getByRole('alert').textContent).toContain('已取消');
+    expect(s.resume).not.toHaveBeenCalled(); expect(s.start).not.toHaveBeenCalled();
+    expect(transcript().getByText(first.chinese)).toBeTruthy();
+  });
+  it('closes a late picker result after leaving the workspace without attaching it to the session', async () => {
+    const picked = deferred<TabAudioCapture>(), input = capture(); tabAudio.request.mockReturnValue(picked.promise);
+    const s = session({ sessionSettings: tabSettings });
+    const view = render(<Workspace session={s} onSettings={vi.fn()}/>);
+    fireEvent.click(screen.getByRole('button', { name: '重新選擇分頁' })); view.unmount();
+    await act(async () => { picked.resolve(input); });
+    expect(input.close).toHaveBeenCalledTimes(1); expect(s.resume).not.toHaveBeenCalled();
+  });
+});
 
 describe('accumulating bilingual transcript', () => {
   it.each([true, false])('appends every bilingual row and follows its bottom with mobile=%s', mobile => {

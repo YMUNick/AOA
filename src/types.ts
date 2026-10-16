@@ -1,8 +1,10 @@
 export type Provider = 'openai' | 'gemini';
 export type ConnectionMode = 'personal' | 'gateway';
 export type TranslationMode = 'local' | 'cloud' | 'off';
+export type AudioSource = 'microphone' | 'tab';
 export type AnswerStyle = 'concise' | 'star';
 export interface Settings {
+  audioSource: AudioSource;
   connectionMode: ConnectionMode;
   provider: Provider;
   apiKey: string;
@@ -23,6 +25,7 @@ export interface TranscriptSegment {
   chinese: string;
   time: number;
   translationState: 'pending' | 'done' | 'error' | 'off';
+  recognitionState?: 'unconfirmed';
   error?: string;
 }
 export type SpeechState = 'idle' | 'requesting' | 'listening' | 'reconnecting' | 'paused' | 'stopped' | 'error';

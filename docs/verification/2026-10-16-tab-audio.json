@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-16",
+  "status": "passed",
+  "chrome": "155.0.8059.40",
+  "startedAt": "2026-10-16T02:32:52.154Z",
+  "finishedAt": "2026-10-16T02:34:01.566Z",
+  "observedActiveSeconds": 60,
+  "scope": "Actual getDisplayMedia of an owned synthetic-English tab, production PCM worklet and SpeechController, native SpeechRecognition(audioTrack), rendered transcript. Not a live Meet, physical microphone, or one-hour tab-capture test.",
+  "testOnlyLocalPlaybackSuppressed": true,
+  "playbackExplanation": "Removed Playwright global mute because it silences capture too. The test overrides only suppressLocalAudioPlayback to true before starting the synthetic source. Production requests false to preserve meeting playback; that option is covered by unit tests.",
+  "nativeStartConfirmed": true,
+  "recognitionStarts": 3,
+  "nativeFinals": 13,
+  "renderedRows": 15,
+  "forcedAbortCount": 2,
+  "errorEvents": [
+    "aborted",
+    "aborted"
+  ],
+  "distinctRecognitionInputTracks": 1,
+  "microphoneCalls": 0,
+  "paidProviderCalls": 0,
+  "pageErrors": [],
+  "maximumFinalGapMs": 6055.0,
+  "finalGapCaveat": "Interval between native final events, not speech completeness or end-to-end latency.",
+  "finalsBeforeStop": 12,
+  "finalsAfterStop": 13,
+  "stoppedTrackState": "ended",
+  "noRestartDuringTwoSecondStopObservation": true,
+  "unitAndIntegrationTests": 245,
+  "responsiveStates": 76,
+  "sourceFilesSha256": {
+    "src/lib/pcmBuffer.ts": "de587609332e3978156b1d720b00cba5fd63c2e8d15662f467cfba2c42d30a38",
+    "src/lib/tabAudio.worklet.ts": "b256fed2b61cb813b535b0525e65f78a6bad96949c290f22b0c50c96db665dc7",
+    "src/hooks/useInterview.ts": "8a9b828863dd698c65c9c037639d76e002079fcb55fdcb69256164494449d2d2",
+    "src/lib/tabAudio.ts": "47fd53b8246679c3bc4762d4a961d4e91a28436272a7eba09f5fa9efac86db7a",
+    "src/lib/speech.ts": "def4eb29169a37033cce86d0957d2152e626a430ac708daaba5d71fef8d79837"
+  }
+}

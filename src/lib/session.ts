@@ -1,6 +1,7 @@
 import type { Settings, TranscriptSegment } from '../types';
 
 export const DEFAULT_SETTINGS: Settings = {
+  audioSource: 'microphone',
   connectionMode: 'personal', provider: 'openai', apiKey: '', gatewayUrl: '', accessCode: '', sessionToken: '',
   translationMode: 'local', profile: '', budgetUsd: 0.5, expectedAnswers: 20, answerStyle: 'concise',
 };
@@ -17,7 +18,7 @@ export function formatTime(seconds: number) {
 export function formatMoney(value: number) { return `US$${value > 0 && value < 0.01 ? value.toFixed(4) : value.toFixed(2)}`; }
 export function exportTranscript(segments: TranscriptSegment[], answer: string, demo: boolean) {
   const body = [`AOA 面試筆記${demo ? '（示範內容）' : ''}`, new Date().toLocaleString('zh-TW'), '',
-    ...segments.flatMap(s => [`[${formatTime(s.time)}] ${s.english}`, s.chinese || '（尚無翻譯）', '']),
+    ...segments.flatMap(s => [`[${formatTime(s.time)}] ${s.recognitionState === 'unconfirmed' ? '（辨識未確認）' : ''}${s.english}`, s.chinese || '（尚無翻譯）', '']),
     ...(answer ? ['最近一次回答建議', answer] : [])].join('\n');
   const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = `AOA-${new Date().toISOString().slice(0, 10)}.txt`;
