@@ -18,6 +18,7 @@ vi.mock('./lib/speech', () => ({ SpeechController: class {
 } }));
 
 beforeEach(() => {
+  window.localStorage.clear();
   services.speech.length = 0;
   services.availability.mockReset().mockResolvedValue('unavailable');
   services.prepare.mockReset().mockRejectedValue(new Error('此裝置沒有可用的本機翻譯。'));
@@ -36,6 +37,23 @@ async function renderApp() {
 function setMode(value: string) { fireEvent.change(mode(), { target: { value } }); }
 
 describe('translation readiness before starting', () => {
+  it('offers alternatives immediately when local translation is confirmed unavailable without changing mode or starting services', async () => {
+    await renderApp();
+    expect(screen.getByRole('button', { name: '改用雲端翻譯（計費）' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '只用英文字幕' })).toBeTruthy();
+    expect(mode().value).toBe('local');
+    expect(services.prepare).not.toHaveBeenCalled(); expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled();
+  });
+
+  it('keeps preparation available for a downloadable model and exposes alternatives after a temporary preparation failure', async () => {
+    services.availability.mockResolvedValue('downloadable');
+    await renderApp();
+    expect(screen.queryByRole('button', { name: '改用雲端翻譯（計費）' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '準備翻譯' })); });
+    expect(screen.getByRole('button', { name: '改用雲端翻譯（計費）' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '準備翻譯' })).toBeTruthy();
+    expect(services.speech).toHaveLength(0);
+  });
   it('stays in setup after local preparation fails even when a personal key is present', async () => {
     await renderApp(); fireEvent.change(key(), { target: { value: 'test-only-key' } });
     expect(mode().value).toBe('local');
@@ -146,5 +164,103 @@ describe('translation readiness before starting', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回本次訪談' }));
     expect(screen.getByText('Keep this question.')).toBeTruthy();
     expect(services.speech).toHaveLength(1); expect(services.cloud).not.toHaveBeenCalled();
+  });
+});
+
+describe('non-secret setup preferences', () => {
+  const storageKey = 'aoa.preferences.v1';
+  it('restores the explicitly chosen cloud provider and translation mode on a fresh mount without restoring a key or starting services', async () => {
+    await renderApp();
+    fireEvent.change(key(), { target: { value: 'test-only-key' } });
+    setMode('cloud');
+    fireEvent.change(screen.getByLabelText('AI 服務'), { target: { value: 'gemini' } });
+    cleanup(); await renderApp();
+    expect(mode().value).toBe('cloud');
+    expect((screen.getByLabelText('AI 服務') as HTMLSelectElement).value).toBe('gemini');
+    expect((screen.getByLabelText(/Gemini API 金鑰/) as HTMLInputElement).value).toBe('');
+    expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled(); expect(services.connect).not.toHaveBeenCalled();
+  });
+
+  it('saves only the three preferences even when all session fields are populated and restores gateway mode without credentials', async () => {
+    await renderApp();
+    fireEvent.change(key(), { target: { value: 'test-only-key' } });
+    fireEvent.change(screen.getByLabelText('應徵職位、真實經歷與擅長的能力'), { target: { value: 'Private profile fixture' } });
+    fireEvent.change(screen.getByLabelText(/本次預算上限/), { target: { value: '8' } });
+    setMode('cloud');
+    fireEvent.change(screen.getByLabelText('連線方式'), { target: { value: 'gateway' } });
+    fireEvent.change(screen.getByLabelText('代理服務位址'), { target: { value: 'https://private.example.com' } });
+    fireEvent.change(screen.getByLabelText('私人存取碼'), { target: { value: 'private-access-fixture' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '連線代理' })); });
+    setMode('off');
+    expect(JSON.parse(window.localStorage.getItem(storageKey)!)).toEqual({ version: 1, translationMode: 'off', provider: 'openai', connectionMode: 'gateway' });
+    expect(window.localStorage.length).toBe(1);
+    cleanup(); await renderApp();
+    expect(mode().value).toBe('off');
+    expect((screen.getByLabelText('連線方式') as HTMLSelectElement).value).toBe('gateway');
+    expect((screen.getByLabelText('代理服務位址') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('私人存取碼') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText(/本次預算上限/) as HTMLInputElement).value).toBe('0.5');
+    expect((screen.getByLabelText('應徵職位、真實經歷與擅長的能力') as HTMLTextAreaElement).value).toBe('');
+    setMode('cloud'); await start();
+    expect(screen.getByRole('alert').textContent).toMatch(/代理/);
+    expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled();
+  });
+
+  it('does not write storage on initial load or while typing credentials and profile', async () => {
+    const save = vi.spyOn(Storage.prototype, 'setItem');
+    await renderApp();
+    fireEvent.change(key(), { target: { value: 'test-only-key' } });
+    fireEvent.change(screen.getByLabelText('應徵職位、真實經歷與擅長的能力'), { target: { value: 'Private fixture' } });
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'not json', 'null', '[]',
+    JSON.stringify({ version: 2, translationMode: 'cloud', provider: 'gemini', connectionMode: 'personal' }),
+    JSON.stringify({ version: 1, translationMode: 'automatic', provider: 'openai', connectionMode: 'personal' }),
+    JSON.stringify({ version: 1, translationMode: 'cloud', provider: 'unknown', connectionMode: 'personal' }),
+    JSON.stringify({ version: 1, translationMode: 'cloud', provider: 'openai', connectionMode: 'unknown' }),
+    JSON.stringify({ version: 1, translationMode: 'cloud', provider: 'gemini' }),
+  ])('ignores malformed or unsupported stored preferences: %s', async stored => {
+    window.localStorage.setItem(storageKey, stored);
+    await renderApp();
+    expect(mode().value).toBe('local');
+    expect((screen.getByLabelText('AI 服務') as HTMLSelectElement).value).toBe('openai');
+    expect((screen.getByLabelText('連線方式') as HTMLSelectElement).value).toBe('personal');
+    expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled();
+  });
+
+  it('reconstructs allowed preferences without importing extra stored settings or credentials', async () => {
+    window.localStorage.setItem(storageKey, JSON.stringify({ version: 1, translationMode: 'cloud', provider: 'gemini', connectionMode: 'gateway', apiKey: 'injected-key-fixture', gatewayUrl: 'https://injected.example.com', accessCode: 'injected-access', sessionToken: 'injected-token', profile: 'injected profile', budgetUsd: 19 }));
+    await renderApp();
+    expect(mode().value).toBe('cloud');
+    expect((screen.getByLabelText('AI 服務') as HTMLSelectElement).value).toBe('openai');
+    expect((screen.getByLabelText('代理服務位址') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('私人存取碼') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText(/本次預算上限/) as HTMLInputElement).value).toBe('0.5');
+    await start(); expect(screen.getByRole('alert').textContent).toMatch(/代理/); expect(services.speech).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('連線方式'), { target: { value: 'personal' } });
+    expect(key().value).toBe('');
+  });
+
+  it('continues to allow explicit choices when storage reads and writes are denied', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new DOMException('Denied', 'SecurityError'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    await renderApp(); expect(mode().value).toBe('local');
+    setMode('cloud'); expect(mode().value).toBe('cloud');
+    fireEvent.change(key(), { target: { value: 'test-only-key' } });
+    expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled();
+    await start(); expect(screen.getByRole('log')).toBeTruthy(); expect(services.speech).toHaveLength(1);
+  });
+
+  it('does not replace a restored cloud choice when the asynchronous local availability check completes', async () => {
+    let resolve!: (status: string) => void;
+    services.availability.mockReturnValue(new Promise<string>(done => { resolve = done; }));
+    window.localStorage.setItem(storageKey, JSON.stringify({ version: 1, translationMode: 'cloud', provider: 'openai', connectionMode: 'personal' }));
+    await renderApp(); expect(mode().value).toBe('cloud');
+    await act(async () => { resolve('unavailable'); });
+    expect(mode().value).toBe('cloud');
+    expect(screen.queryByRole('button', { name: '改用雲端翻譯（計費）' })).toBeNull();
+    expect(services.speech).toHaveLength(0); expect(services.cloud).not.toHaveBeenCalled(); expect(services.prepare).not.toHaveBeenCalled();
   });
 });

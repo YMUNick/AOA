@@ -8,7 +8,7 @@ interface Props {
   settings: Settings; setSettings: (s: Settings) => void; onStart: (demo: boolean) => void;
   onPrepare: () => void; localStatus: string; progress: number; preparing: boolean; starting: boolean;
   onConnect: () => void; connecting: boolean; connectionMessage: string; locked: boolean; onReturn: () => void;
-  startError: string; localPreparationFailed: boolean;
+  startError: string; localPreparationFailed: boolean; localUnavailable: boolean;
 }
 export function Home(p: Props) {
   const { settings: s } = p;
@@ -31,9 +31,10 @@ export function Home(p: Props) {
           <div className="translation-box">
             <div className="translation-title"><Globe2 size={19}/><label htmlFor="translation">翻譯方式</label><span className="mini-badge">省費優先</span></div>
             <div className="translation-control"><select id="translation" disabled={p.locked} value={s.translationMode} onChange={e => set('translationMode', e.target.value as Settings['translationMode'])}><option value="local">本機翻譯 · 無翻譯 API 費</option><option value="cloud">雲端翻譯 · 會使用付費 API</option><option value="off">只顯示英文字幕</option></select></div>
+            <p className="field-hint">會記住翻譯方式、AI 服務與連線方式；API 金鑰只保留於此分頁，重新整理後需重填。</p>
             {s.translationMode === 'local' && <div className="local-preparation"><span role="status">{p.preparing ? `正在準備語言模型 ${Math.round(p.progress * 100)}%` : p.localStatus}</span><button type="button" className="text-button" disabled={p.preparing || p.locked} onClick={p.onPrepare}>{p.preparing ? <LoaderCircle className="spin" size={15}/> : <Monitor size={15}/>}準備翻譯</button></div>}
             {s.translationMode === 'local' && <p className="field-hint">本機翻譯準備完成後才會顯示中文。若裝置不支援，可手動選擇付費雲端翻譯並設定 AI 連線。</p>}
-            {s.translationMode === 'local' && p.localPreparationFailed && !p.locked && <div className="translation-fallback-actions"><button type="button" className="button secondary" onClick={() => set('translationMode', 'cloud')}>改用雲端翻譯（計費）</button><button type="button" className="button secondary" onClick={() => set('translationMode', 'off')}>只用英文字幕</button></div>}
+            {s.translationMode === 'local' && (p.localUnavailable || p.localPreparationFailed) && !p.locked && <div className="translation-fallback-actions"><button type="button" className="button secondary" onClick={() => set('translationMode', 'cloud')}>改用雲端翻譯（計費）</button><button type="button" className="button secondary" onClick={() => set('translationMode', 'off')}>只用英文字幕</button></div>}
             {s.translationMode === 'cloud' && <p className="field-hint">沿用下方已選 AI 服務的 API 金鑰或代理連線。選擇此模式後，每段新完成的英文會自動送出翻譯並計費。</p>}
             {s.translationMode === 'off' && <p className="field-hint">中文未啟用，只顯示英文字幕。需要中文時，請在開始新訪談前選擇可用的翻譯方式。</p>}
             {p.preparing && <progress max="1" value={p.progress} aria-label="翻譯模型下載進度"/>}
